@@ -8,15 +8,34 @@ and utilities for working with generic types.
 
 from __future__ import annotations
 
+import sys
 import types
 from dataclasses import dataclass
 from typing import dataclass_transform, get_args, get_origin, Any, ClassVar
+from enum import Enum
 
 # =============================================================================
 # Primitives
 # =============================================================================
 
 PRIMITIVES: frozenset[type] = frozenset({float, int, str, bool, type(None)})
+
+# =============================================================================
+# Type Parameter Metadata
+# =============================================================================
+
+class TypeParamKind(Enum):
+    """Kind of type parameter (PEP 695)."""
+    TYPEVAR = "typevar"           # Regular type variable (T)
+    PARAMSPEC = "paramspec"       # Parameter specification (**P)
+    TYPEVARTUPLE = "typevartuple" # Type variable tuple (*Ts)
+
+
+class Variance(Enum):
+    """Variance of a type parameter."""
+    INVARIANT = "invariant"       # T (default)
+    COVARIANT = "covariant"       # T_co (can be subtype)
+    CONTRAVARIANT = "contravariant"  # T_contra (can be supertype)
 
 # =============================================================================
 # Type Definitions
@@ -55,16 +74,35 @@ class UnionType(TypeDef, tag="union"):
 
 
 class GenericType(TypeDef, tag="generic"):
-    """Represents a generic/parameterized type."""
-    name: str
-    origin: str  # Name of the generic origin (e.g., "list", "dict", "Ref")
-    args: tuple[TypeDef, ...]
+    """
+    Represents a parameterized/applied generic type.
+
+    Examples: list[int], dict[str, float], Node[int]
+    This is a concrete application of a generic type with specific type arguments.
+    """
+    name: str  # Full name like "list[int]"
+    origin: TypeDef  # The generic origin type
+    args: tuple[TypeDef, ...]  # Type arguments
 
 
 class TypeVarType(TypeDef, tag="typevar"):
-    """Represents a type variable with optional bounds."""
+    """
+    Represents a type variable or type parameter.
+
+    Handles both old-style TypeVar and PEP 695 type parameters.
+
+    Examples:
+        - TypeVar('T')
+        - TypeVar('T', bound=int)
+        - TypeVar('T', int, str)  # constraints
+        - class Foo[T]: ...  # PEP 695 syntax
+    """
     name: str
-    bounds: tuple[TypeDef, ...] | None = None
+    kind: TypeParamKind = TypeParamKind.TYPEVAR
+    variance: Variance = Variance.INVARIANT
+    bounds: tuple[TypeDef, ...] | None = None  # Upper bounds
+    constraints: tuple[TypeDef, ...] | None = None  # Type constraints
+    default: TypeDef | None = None  # Default type (Python 3.13+)
 
 
 # =============================================================================
