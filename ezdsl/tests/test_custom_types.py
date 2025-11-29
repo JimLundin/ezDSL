@@ -5,9 +5,6 @@ import pytest
 from ezdsl.nodes import Node
 from ezdsl.types import (
     TypeDef,
-    register_custom_type,
-    get_custom_type,
-    custom_type,
     IntType,
     StrType,
     NodeType,
@@ -20,22 +17,22 @@ from ezdsl.serialization import to_dict, from_dict
 # Define Custom Types
 # =============================================================================
 
-# User defines marker classes and registers them with custom_type()
-@custom_type
+# User defines marker classes and registers them with TypeDef.register()
+@TypeDef.register
 class DataFrame:
     """User-defined DataFrame type marker."""
     pass
 
 
-@custom_type
+@TypeDef.register
 class Matrix:
     """User-defined Matrix type marker."""
     pass
 
 
 # Get the TypeDef classes for assertions
-DataFrameType = get_custom_type(DataFrame)
-MatrixType = get_custom_type(Matrix)
+DataFrameType = TypeDef.get_registered_type(DataFrame)
+MatrixType = TypeDef.get_registered_type(Matrix)
 
 
 # =============================================================================
@@ -76,18 +73,17 @@ class TestCustomTypeRegistration:
         class MyType:
             pass
 
-        class MyTypeType(TypeDef, tag="mytype", namespace="custom"):
-            __annotations__ = {}
-
-        register_custom_type(MyType, MyTypeType)
-        assert get_custom_type(MyType) == MyTypeType
+        # Use TypeDef.register decorator
+        TypeDef.register(MyType)
+        assert TypeDef.get_registered_type(MyType) is not None
+        assert TypeDef.get_registered_type(MyType)._tag == "custom.mytype"
 
     def test_get_unregistered_type(self):
         """Test getting an unregistered type returns None."""
         class UnregisteredType:
             pass
 
-        assert get_custom_type(UnregisteredType) is None
+        assert TypeDef.get_registered_type(UnregisteredType) is None
 
 
 class TestCustomTypeExtraction:
