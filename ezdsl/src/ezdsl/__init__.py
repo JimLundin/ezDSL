@@ -26,10 +26,6 @@ from ezdsl.types import (
     RefType,
     UnionType,
     TypeParameter,
-
-    # Custom type registration
-    register_custom_type,
-    get_custom_type,
 )
 
 from ezdsl.serialization import (
@@ -59,7 +55,7 @@ __all__ = [
     "Child",
     "AST",
 
-    # Type definitions
+    # Type definitions (TypeDef has classmethod register() and get_registered_type())
     "TypeDef",
     "IntType",
     "FloatType",
@@ -72,10 +68,6 @@ __all__ = [
     "RefType",
     "UnionType",
     "TypeParameter",
-
-    # Custom type registration
-    "register_custom_type",
-    "get_custom_type",
 
     # Serialization
     "to_dict",

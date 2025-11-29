@@ -21,53 +21,172 @@ class TypeDef:
     """Base for type definitions."""
 
     _tag: ClassVar[str]
+    _namespace: ClassVar[str]
     _registry: ClassVar[dict[str, type[TypeDef]]] = {}
+    _custom_types: ClassVar[dict[type, type[TypeDef]]] = {}  # Maps Python types to TypeDef classes
 
-    def __init_subclass__(cls, tag: str | None = None, **kwargs):
+    def __init_subclass__(cls, tag: str | None = None, namespace: str | None = None, **kwargs):
         super().__init_subclass__(**kwargs)
-        if "__annotations__" not in cls.__dict__:
-            return
-        # dataclass returns a modified class - we don't need to reassign in __init_subclass__
-        # because it modifies the class in place, but we should still call it
+
+        # Always convert to frozen dataclass
         dataclass(frozen=True)(cls)
-        cls._tag = tag or cls.__name__.lower().removesuffix("type")
+
+        # Store namespace and base tag
+        cls._namespace = namespace or ""
+        base_tag = tag or cls.__name__.lower().removesuffix("type")
+
+        # Create full namespaced tag
+        cls._tag = f"{namespace}.{base_tag}" if namespace else base_tag
+
+        # Check for collisions
+        if cls._tag in TypeDef._registry:
+            existing = TypeDef._registry[cls._tag]
+            if existing is not cls:
+                raise ValueError(
+                    f"Tag '{cls._tag}' already registered to {existing}. "
+                    f"Choose a different tag or namespace."
+                )
+
         TypeDef._registry[cls._tag] = cls
+
+    @classmethod
+    def register(
+        cls,
+        python_type: type | None = None,
+        *,
+        tag: str | None = None,
+        namespace: str = "custom"
+    ) -> type[TypeDef] | Any:
+        """
+        Register a custom type with the type system.
+
+        This method can be used either as a decorator or as a regular function call
+        to register existing types (like pandas DataFrame, numpy ndarray, etc.) with
+        the DSL type system.
+
+        Args:
+            python_type: The Python class to register. If None, returns a decorator.
+            tag: Optional tag name. Defaults to lowercase class name.
+            namespace: Namespace for the type. Defaults to "custom".
+
+        Returns:
+            If used as decorator: returns the original class unchanged
+            If used as function: returns the created TypeDef subclass
+
+        Examples:
+            # Register an existing type (e.g., pandas DataFrame)
+            >>> import pandas as pd
+            >>> TypeDef.register(pd.DataFrame)  # tag="custom.dataframe"
+            >>> TypeDef.register(pd.DataFrame, tag="df")  # tag="custom.df"
+
+            # Use as decorator for marker classes
+            >>> @TypeDef.register
+            ... class GraphicsContext:
+            ...     '''Marker for graphics context type.'''
+            ...     pass
+
+            # Use as decorator with custom tag
+            >>> @TypeDef.register(tag="matrix")
+            ... class Matrix:
+            ...     pass
+        """
+        def _create_typedef(py_type: type) -> type[TypeDef]:
+            """Create and register a TypeDef for the given Python type."""
+            # Determine the tag
+            base_tag = tag or py_type.__name__.lower()
+
+            # Check if already registered
+            if py_type in cls._custom_types:
+                existing = cls._custom_types[py_type]
+                full_tag = f"{namespace}.{base_tag}" if namespace else base_tag
+                # If same tag, it's idempotent
+                if existing._tag == full_tag:
+                    return existing
+                raise ValueError(
+                    f"Type {py_type} already registered with tag '{existing._tag}'. "
+                    f"Cannot re-register with tag '{full_tag}'."
+                )
+
+            # Create TypeDef subclass dynamically
+            typedef_name = f"{py_type.__name__}Type"
+
+            # Build class dict
+            class_dict = {
+                "__module__": py_type.__module__,
+                "__doc__": f"Custom type definition for {py_type.__name__}.",
+            }
+
+            # Create the class - type() will call __init_subclass__ with our kwargs
+            typedef_cls = type(typedef_name, (TypeDef,), class_dict, tag=base_tag, namespace=namespace)
+
+            # Register the mapping
+            cls._custom_types[py_type] = typedef_cls
+
+            return typedef_cls
+
+        # If called without arguments as a decorator: @TypeDef.register
+        if python_type is not None:
+            typedef = _create_typedef(python_type)
+            # When used as decorator, return the original class unchanged
+            # This allows the marker class to still be used normally
+            return python_type
+
+        # If called with arguments: @TypeDef.register(tag="foo")
+        # Return a decorator that will be applied to the class
+        def decorator(py_type: type) -> type:
+            _create_typedef(py_type)
+            return py_type
+
+        return decorator
+
+    @classmethod
+    def get_registered_type(cls, python_type: type) -> type[TypeDef] | None:
+        """
+        Get the registered TypeDef for a Python type.
+
+        Args:
+            python_type: The Python type to look up
+
+        Returns:
+            The TypeDef class registered for this type, or None if not registered
+        """
+        return cls._custom_types.get(python_type)
 
 
 # =============================================================================
 # Primitive Types (Concrete)
 # =============================================================================
 
-class IntType(TypeDef, tag="int"):
+class IntType(TypeDef, tag="int", namespace="std"):
     """Integer type."""
-    __annotations__ = {}  # Trigger dataclass conversion
+    pass
 
 
-class FloatType(TypeDef, tag="float"):
+class FloatType(TypeDef, tag="float", namespace="std"):
     """Floating point type."""
-    __annotations__ = {}  # Trigger dataclass conversion
+    pass
 
 
-class StrType(TypeDef, tag="str"):
+class StrType(TypeDef, tag="str", namespace="std"):
     """String type."""
-    __annotations__ = {}  # Trigger dataclass conversion
+    pass
 
 
-class BoolType(TypeDef, tag="bool"):
+class BoolType(TypeDef, tag="bool", namespace="std"):
     """Boolean type."""
-    __annotations__ = {}  # Trigger dataclass conversion
+    pass
 
 
-class NoneType(TypeDef, tag="none"):
+class NoneType(TypeDef, tag="none", namespace="std"):
     """None/null type."""
-    __annotations__ = {}  # Trigger dataclass conversion
+    pass
 
 
 # =============================================================================
 # Container Types (Concrete)
 # =============================================================================
 
-class ListType(TypeDef, tag="list"):
+class ListType(TypeDef, tag="list", namespace="std"):
     """
     List type with element type.
 
@@ -76,7 +195,7 @@ class ListType(TypeDef, tag="list"):
     element: TypeDef
 
 
-class DictType(TypeDef, tag="dict"):
+class DictType(TypeDef, tag="dict", namespace="std"):
     """
     Dictionary type with key and value types.
 
@@ -90,7 +209,7 @@ class DictType(TypeDef, tag="dict"):
 # Domain Types
 # =============================================================================
 
-class NodeType(TypeDef, tag="node"):
+class NodeType(TypeDef, tag="node", namespace="std"):
     """
     AST Node type with return type.
 
@@ -99,7 +218,7 @@ class NodeType(TypeDef, tag="node"):
     returns: TypeDef
 
 
-class RefType(TypeDef, tag="ref"):
+class RefType(TypeDef, tag="ref", namespace="std"):
     """
     Reference type pointing to another type.
 
@@ -108,7 +227,7 @@ class RefType(TypeDef, tag="ref"):
     target: TypeDef
 
 
-class UnionType(TypeDef, tag="union"):
+class UnionType(TypeDef, tag="union", namespace="std"):
     """
     Union of multiple types.
 
@@ -117,7 +236,7 @@ class UnionType(TypeDef, tag="union"):
     options: tuple[TypeDef, ...]
 
 
-class TypeParameter(TypeDef, tag="param"):
+class TypeParameter(TypeDef, tag="param", namespace="std"):
     """
     Type parameter in PEP 695 syntax.
 
@@ -131,52 +250,6 @@ class TypeParameter(TypeDef, tag="param"):
     """
     name: str
     bound: TypeDef | None = None  # Upper bound constraint (e.g., T: int)
-
-
-# =============================================================================
-# Custom Type Registry
-# =============================================================================
-
-# Global registry for user-defined types
-# Maps Python marker classes to their TypeDef representations
-_CUSTOM_TYPE_REGISTRY: dict[type, type[TypeDef]] = {}
-
-
-def register_custom_type(python_type: type, typedef: type[TypeDef]) -> None:
-    """
-    Register a custom Python type to TypeDef mapping.
-
-    This allows DSL users to define custom types (like DataFrame, Matrix, etc.)
-    that can be used in type hints while maintaining IDE support.
-
-    Args:
-        python_type: The Python class to use as a type marker (e.g., DataFrame)
-        typedef: The TypeDef subclass for serialization (e.g., DataFrameType)
-
-    Example:
-        >>> class DataFrame:
-        ...     '''User-defined DataFrame type.'''
-        ...     pass
-        >>>
-        >>> class DataFrameType(TypeDef, tag="dataframe"):
-        ...     __annotations__ = {}
-        >>>
-        >>> register_custom_type(DataFrame, DataFrameType)
-        >>>
-        >>> # Now you can use it in your DSL:
-        >>> class FetchData(Node[DataFrame], tag="fetch"):
-        ...     query: str
-    """
-    _CUSTOM_TYPE_REGISTRY[python_type] = typedef
-
-
-def get_custom_type(python_type: type) -> type[TypeDef] | None:
-    """
-    Get the registered TypeDef for a Python type.
-
-    Returns None if the type is not registered.
-    """
-    return _CUSTOM_TYPE_REGISTRY.get(python_type)
 
 
 # =============================================================================

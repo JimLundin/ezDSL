@@ -25,7 +25,6 @@ from ezdsl.types import (
     RefType,
     UnionType,
     TypeParameter,
-    get_custom_type,
     _substitute_type_params,
 )
 from ezdsl.serialization import to_dict
@@ -48,7 +47,7 @@ def extract_type(py_type: Any) -> TypeDef:
         )
 
     # Handle custom user-defined types
-    custom_typedef = get_custom_type(py_type)
+    custom_typedef = TypeDef.get_registered_type(py_type)
     if custom_typedef is not None:
         return custom_typedef()
 
