@@ -27,6 +27,8 @@ class TypeDef:
         super().__init_subclass__(**kwargs)
         if "__annotations__" not in cls.__dict__:
             return
+        # dataclass returns a modified class - we don't need to reassign in __init_subclass__
+        # because it modifies the class in place, but we should still call it
         dataclass(frozen=True)(cls)
         cls._tag = tag or cls.__name__.lower().removesuffix("type")
         TypeDef._registry[cls._tag] = cls
@@ -129,6 +131,52 @@ class TypeParameter(TypeDef, tag="param"):
     """
     name: str
     bound: TypeDef | None = None  # Upper bound constraint (e.g., T: int)
+
+
+# =============================================================================
+# Custom Type Registry
+# =============================================================================
+
+# Global registry for user-defined types
+# Maps Python marker classes to their TypeDef representations
+_CUSTOM_TYPE_REGISTRY: dict[type, type[TypeDef]] = {}
+
+
+def register_custom_type(python_type: type, typedef: type[TypeDef]) -> None:
+    """
+    Register a custom Python type to TypeDef mapping.
+
+    This allows DSL users to define custom types (like DataFrame, Matrix, etc.)
+    that can be used in type hints while maintaining IDE support.
+
+    Args:
+        python_type: The Python class to use as a type marker (e.g., DataFrame)
+        typedef: The TypeDef subclass for serialization (e.g., DataFrameType)
+
+    Example:
+        >>> class DataFrame:
+        ...     '''User-defined DataFrame type.'''
+        ...     pass
+        >>>
+        >>> class DataFrameType(TypeDef, tag="dataframe"):
+        ...     __annotations__ = {}
+        >>>
+        >>> register_custom_type(DataFrame, DataFrameType)
+        >>>
+        >>> # Now you can use it in your DSL:
+        >>> class FetchData(Node[DataFrame], tag="fetch"):
+        ...     query: str
+    """
+    _CUSTOM_TYPE_REGISTRY[python_type] = typedef
+
+
+def get_custom_type(python_type: type) -> type[TypeDef] | None:
+    """
+    Get the registered TypeDef for a Python type.
+
+    Returns None if the type is not registered.
+    """
+    return _CUSTOM_TYPE_REGISTRY.get(python_type)
 
 
 # =============================================================================

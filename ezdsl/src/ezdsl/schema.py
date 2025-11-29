@@ -25,6 +25,7 @@ from ezdsl.types import (
     RefType,
     UnionType,
     TypeParameter,
+    get_custom_type,
     _substitute_type_params,
 )
 from ezdsl.serialization import to_dict
@@ -45,6 +46,11 @@ def extract_type(py_type: Any) -> TypeDef:
             name=py_type.__name__,
             bound=extract_type(bound) if bound is not None else None
         )
+
+    # Handle custom user-defined types
+    custom_typedef = get_custom_type(py_type)
+    if custom_typedef is not None:
+        return custom_typedef()
 
     # PEP 695 type aliases - automatically expand them
     if isinstance(origin, TypeAliasType):
