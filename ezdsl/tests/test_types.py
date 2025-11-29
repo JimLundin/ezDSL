@@ -4,47 +4,82 @@ import pytest
 
 from ezdsl.types import (
     TypeDef,
-    PrimitiveType,
+    IntType,
+    FloatType,
+    StrType,
+    BoolType,
+    NoneType,
+    ListType,
+    DictType,
     NodeType,
     RefType,
     UnionType,
-    ParameterizedType,
     TypeParameter,
-    PRIMITIVES,
 )
 
 
-class TestPrimitives:
-    """Test primitive type handling."""
+class TestPrimitiveTypes:
+    """Test concrete primitive types."""
 
-    def test_primitives_frozenset(self):
-        """Test that PRIMITIVES contains expected types."""
-        assert float in PRIMITIVES
-        assert int in PRIMITIVES
-        assert str in PRIMITIVES
-        assert bool in PRIMITIVES
-        assert type(None) in PRIMITIVES
+    def test_int_type_creation(self):
+        """Test creating an IntType."""
+        it = IntType()
+        assert it._tag == "int"
 
-    def test_primitives_immutable(self):
-        """Test that PRIMITIVES is immutable."""
-        with pytest.raises((TypeError, AttributeError)):
-            PRIMITIVES.add(list)
+    def test_float_type_creation(self):
+        """Test creating a FloatType."""
+        ft = FloatType()
+        assert ft._tag == "float"
 
+    def test_str_type_creation(self):
+        """Test creating a StrType."""
+        st = StrType()
+        assert st._tag == "str"
 
-class TestPrimitiveType:
-    """Test PrimitiveType."""
+    def test_bool_type_creation(self):
+        """Test creating a BoolType."""
+        bt = BoolType()
+        assert bt._tag == "bool"
 
-    def test_primitive_type_creation(self):
-        """Test creating a PrimitiveType."""
-        pt = PrimitiveType(int)
-        assert pt.primitive == int
-        assert pt._tag == "primitive"
+    def test_none_type_creation(self):
+        """Test creating a NoneType."""
+        nt = NoneType()
+        assert nt._tag == "none"
 
-    def test_primitive_type_frozen(self):
-        """Test that PrimitiveType is immutable."""
-        pt = PrimitiveType(int)
+    def test_primitive_types_frozen(self):
+        """Test that primitive types are immutable."""
+        it = IntType()
         with pytest.raises((AttributeError, TypeError)):
-            pt.primitive = float
+            it._tag = "other"
+
+
+class TestContainerTypes:
+    """Test concrete container types."""
+
+    def test_list_type_creation(self):
+        """Test creating a ListType."""
+        lt = ListType(element=IntType())
+        assert lt._tag == "list"
+        assert isinstance(lt.element, IntType)
+
+    def test_list_type_frozen(self):
+        """Test that ListType is immutable."""
+        lt = ListType(element=IntType())
+        with pytest.raises((AttributeError, TypeError)):
+            lt.element = StrType()
+
+    def test_dict_type_creation(self):
+        """Test creating a DictType."""
+        dt = DictType(key=StrType(), value=IntType())
+        assert dt._tag == "dict"
+        assert isinstance(dt.key, StrType)
+        assert isinstance(dt.value, IntType)
+
+    def test_dict_type_frozen(self):
+        """Test that DictType is immutable."""
+        dt = DictType(key=StrType(), value=IntType())
+        with pytest.raises((AttributeError, TypeError)):
+            dt.key = IntType()
 
 
 class TestNodeType:
@@ -52,16 +87,15 @@ class TestNodeType:
 
     def test_node_type_creation(self):
         """Test creating a NodeType."""
-        returns = PrimitiveType(float)
-        nt = NodeType(returns)
-        assert nt.returns == returns
+        nt = NodeType(returns=FloatType())
+        assert nt.returns._tag == "float"
         assert nt._tag == "node"
 
     def test_node_type_frozen(self):
         """Test that NodeType is immutable."""
-        nt = NodeType(PrimitiveType(int))
+        nt = NodeType(returns=IntType())
         with pytest.raises((AttributeError, TypeError)):
-            nt.returns = PrimitiveType(float)
+            nt.returns = FloatType()
 
 
 class TestRefType:
@@ -69,16 +103,15 @@ class TestRefType:
 
     def test_ref_type_creation(self):
         """Test creating a RefType."""
-        target = PrimitiveType(int)
-        rt = RefType(target)
-        assert rt.target == target
+        rt = RefType(target=IntType())
+        assert isinstance(rt.target, IntType)
         assert rt._tag == "ref"
 
     def test_ref_type_frozen(self):
         """Test that RefType is immutable."""
-        rt = RefType(PrimitiveType(int))
+        rt = RefType(target=IntType())
         with pytest.raises((AttributeError, TypeError)):
-            rt.target = PrimitiveType(float)
+            rt.target = FloatType()
 
 
 class TestUnionType:
@@ -86,40 +119,17 @@ class TestUnionType:
 
     def test_union_type_creation(self):
         """Test creating a UnionType."""
-        options = (PrimitiveType(int), PrimitiveType(str))
-        ut = UnionType(options)
-        assert ut.options == options
+        ut = UnionType(options=(IntType(), StrType()))
+        assert len(ut.options) == 2
+        assert isinstance(ut.options[0], IntType)
+        assert isinstance(ut.options[1], StrType)
         assert ut._tag == "union"
 
     def test_union_type_frozen(self):
         """Test that UnionType is immutable."""
-        ut = UnionType((PrimitiveType(int), PrimitiveType(str)))
+        ut = UnionType((IntType(), StrType()))
         with pytest.raises((AttributeError, TypeError)):
-            ut.options = (PrimitiveType(float),)
-
-
-class TestParameterizedType:
-    """Test ParameterizedType."""
-
-    def test_parameterized_type_creation(self):
-        """Test creating a ParameterizedType."""
-        origin = PrimitiveType(list)
-        args = (PrimitiveType(int),)
-        pt = ParameterizedType(name="list[int]", origin=origin, args=args)
-        assert pt.name == "list[int]"
-        assert pt.origin == origin
-        assert pt.args == args
-        assert pt._tag == "parameterized"
-
-    def test_parameterized_type_frozen(self):
-        """Test that ParameterizedType is immutable."""
-        pt = ParameterizedType(
-            name="list[int]",
-            origin=PrimitiveType(list),
-            args=(PrimitiveType(int),)
-        )
-        with pytest.raises((AttributeError, TypeError)):
-            pt.name = "list[str]"
+            ut.options = (FloatType(),)
 
 
 class TestTypeParameter:
@@ -134,10 +144,10 @@ class TestTypeParameter:
 
     def test_type_parameter_with_bound(self):
         """Test TypeParameter with bound (like T: int)."""
-        bound = PrimitiveType(int)
+        bound = IntType()
         tp = TypeParameter(name="T", bound=bound)
         assert tp.name == "T"
-        assert tp.bound == bound
+        assert isinstance(tp.bound, IntType)
 
     def test_type_parameter_frozen(self):
         """Test that TypeParameter is immutable."""
@@ -151,18 +161,59 @@ class TestTypeDefRegistry:
 
     def test_type_registry_contains_types(self):
         """Test that type registry contains all type definitions."""
-        assert "primitive" in TypeDef._registry
+        assert "int" in TypeDef._registry
+        assert "float" in TypeDef._registry
+        assert "str" in TypeDef._registry
+        assert "bool" in TypeDef._registry
+        assert "none" in TypeDef._registry
+        assert "list" in TypeDef._registry
+        assert "dict" in TypeDef._registry
         assert "node" in TypeDef._registry
         assert "ref" in TypeDef._registry
         assert "union" in TypeDef._registry
-        assert "parameterized" in TypeDef._registry
         assert "param" in TypeDef._registry
 
     def test_type_registry_maps_to_classes(self):
         """Test that registry maps tags to correct classes."""
-        assert TypeDef._registry["primitive"] == PrimitiveType
+        assert TypeDef._registry["int"] == IntType
+        assert TypeDef._registry["float"] == FloatType
+        assert TypeDef._registry["str"] == StrType
+        assert TypeDef._registry["bool"] == BoolType
+        assert TypeDef._registry["none"] == NoneType
+        assert TypeDef._registry["list"] == ListType
+        assert TypeDef._registry["dict"] == DictType
         assert TypeDef._registry["node"] == NodeType
         assert TypeDef._registry["ref"] == RefType
         assert TypeDef._registry["union"] == UnionType
-        assert TypeDef._registry["parameterized"] == ParameterizedType
         assert TypeDef._registry["param"] == TypeParameter
+
+
+class TestNestedTypes:
+    """Test nested type structures."""
+
+    def test_list_of_list(self):
+        """Test creating list[list[int]]."""
+        inner = ListType(element=IntType())
+        outer = ListType(element=inner)
+        assert isinstance(outer.element, ListType)
+        assert isinstance(outer.element.element, IntType)
+
+    def test_dict_of_lists(self):
+        """Test creating dict[str, list[int]]."""
+        dt = DictType(
+            key=StrType(),
+            value=ListType(element=IntType())
+        )
+        assert isinstance(dt.key, StrType)
+        assert isinstance(dt.value, ListType)
+        assert isinstance(dt.value.element, IntType)
+
+    def test_union_of_containers(self):
+        """Test creating list[int] | dict[str, float]."""
+        ut = UnionType(options=(
+            ListType(element=IntType()),
+            DictType(key=StrType(), value=FloatType())
+        ))
+        assert len(ut.options) == 2
+        assert isinstance(ut.options[0], ListType)
+        assert isinstance(ut.options[1], DictType)

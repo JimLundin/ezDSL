@@ -14,13 +14,17 @@ import types
 from ezdsl.nodes import Node, Ref
 from ezdsl.types import (
     TypeDef,
-    PrimitiveType,
+    IntType,
+    FloatType,
+    StrType,
+    BoolType,
+    NoneType,
+    ListType,
+    DictType,
     NodeType,
     RefType,
     UnionType,
-    ParameterizedType,
     TypeParameter,
-    PRIMITIVES,
     _substitute_type_params,
 )
 from ezdsl.serialization import to_dict
@@ -62,20 +66,39 @@ def extract_type(py_type: Any) -> TypeDef:
         # Extract the substituted type
         return extract_type(substituted)
 
-    # Primitives
-    if py_type in PRIMITIVES:
-        return PrimitiveType(py_type)
+    # Concrete primitive types
+    if py_type is int:
+        return IntType()
+    if py_type is float:
+        return FloatType()
+    if py_type is str:
+        return StrType()
+    if py_type is bool:
+        return BoolType()
+    if py_type is type(None):
+        return NoneType()
+
+    # Container types
+    if origin is list:
+        if not args:
+            raise ValueError("list type must have an element type")
+        return ListType(element=extract_type(args[0]))
+
+    if origin is dict:
+        if len(args) != 2:
+            raise ValueError("dict type must have key and value types")
+        return DictType(key=extract_type(args[0]), value=extract_type(args[1]))
 
     # Node types
     if origin is not None and isinstance(origin, type) and issubclass(origin, Node):
-        return NodeType(extract_type(args[0]) if args else PrimitiveType(type(None)))
+        return NodeType(extract_type(args[0]) if args else NoneType())
 
     if isinstance(py_type, type) and issubclass(py_type, Node):
         return NodeType(_extract_node_returns(py_type))
 
     # Ref types
     if origin is Ref:
-        return RefType(extract_type(args[0]) if args else PrimitiveType(type(None)))
+        return RefType(extract_type(args[0]) if args else NoneType())
 
     # Union types (typing.Union)
     if origin is Union:
@@ -85,59 +108,18 @@ def extract_type(py_type: Any) -> TypeDef:
     if isinstance(py_type, types.UnionType):
         return UnionType(tuple(extract_type(a) for a in args))
 
-    # Parameterized types (generic types with arguments applied)
-    if origin is not None and args:
-        origin_name = getattr(origin, "__name__", str(origin))
-        extracted_args = tuple(extract_type(a) for a in args)
-
-        # Try to extract the origin as a TypeDef
-        # For built-in types, we'll use a primitive representation
-        origin_typedef = _extract_generic_origin(origin)
-
-        return ParameterizedType(
-            name=f"{origin_name}[{', '.join(str(a) for a in args)}]",
-            origin=origin_typedef,
-            args=extracted_args
-        )
-
     raise ValueError(f"Cannot extract type from: {py_type}")
 
 
-def _extract_generic_origin(origin: Any) -> TypeDef:
-    """
-    Extract the origin type of a generic as a TypeDef.
-
-    For built-in types like list, dict, we create a special representation.
-    For custom types, we try to extract them properly.
-    """
-    # Handle primitives that might be generic origins
-    if origin in PRIMITIVES:
-        return PrimitiveType(origin)
-
-    # Handle Node types
-    if isinstance(origin, type) and issubclass(origin, Node):
-        return NodeType(_extract_node_returns(origin))
-
-    # Handle built-in generic types (list, dict, set, etc.)
-    # We'll represent them as a special primitive-like type
-    if hasattr(origin, "__name__"):
-        # For now, we'll create a simple type representation
-        # In a more complete system, we might want a separate BuiltinGenericType
-        # But for simplicity, we'll use a PrimitiveType with the origin type
-        return PrimitiveType(origin)
-
-    # Fallback: represent as type(None) - this shouldn't happen often
-    return PrimitiveType(type(None))
-
-
 def _extract_node_returns(cls: type[Node]) -> TypeDef:
+    """Extract the return type from a Node class definition."""
     for base in getattr(cls, "__orig_bases__", ()):
         origin = get_origin(base)
         if origin is not None and isinstance(origin, type) and issubclass(origin, Node):
             args = get_args(base)
             if args:
                 return extract_type(args[0])
-    return PrimitiveType(type(None))
+    return NoneType()
 
 
 def node_schema(cls: type[Node]) -> dict:

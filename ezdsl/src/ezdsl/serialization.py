@@ -12,7 +12,7 @@ from typing import get_origin, Any
 import json
 
 from ezdsl.nodes import Node, Ref
-from ezdsl.types import TypeDef, PRIMITIVES
+from ezdsl.types import TypeDef
 
 # =============================================================================
 # Serialization
@@ -40,8 +40,6 @@ def _serialize_value(value: Any) -> Any:
         return [_serialize_value(v) for v in value]
     if isinstance(value, list):
         return [_serialize_value(v) for v in value]
-    if isinstance(value, type):
-        return "none" if value is type(None) else value.__name__
     return value
 
 
@@ -70,12 +68,6 @@ def _deserialize_value(value: Any, hint: Any) -> Any:
         return from_dict(value)
     if isinstance(value, list):
         return tuple(_deserialize_value(v, hint) for v in value)
-    if hint is type or (get_origin(hint) is type):
-        # Reconstruct type from name
-        for p in PRIMITIVES:
-            if ("none" if p is type(None) else p.__name__) == value:
-                return p
-        raise ValueError(f"Unknown primitive: {value}")
     return value
 
 

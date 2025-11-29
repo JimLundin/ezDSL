@@ -1,13 +1,16 @@
-"""Test how generic Node definitions serialize their types."""
+"""Tests for how generic Node definitions serialize their types."""
 
 import pytest
-from typing import TypeVar, get_type_hints
+from typing import TypeVar
 
 from ezdsl.schema import extract_type
 from ezdsl.types import (
-    ParameterizedType,
+    ListType,
+    DictType,
+    IntType,
+    StrType,
+    FloatType,
     TypeParameter,
-    PrimitiveType,
 )
 
 
@@ -20,13 +23,11 @@ def test_type_parameter_in_annotation():
     # What does list[T] extract to?
     result = extract_type(list[T])
 
-    assert isinstance(result, ParameterizedType)
-    assert result.origin.primitive == list
-    assert len(result.args) == 1
+    assert isinstance(result, ListType)
 
-    # The argument is the TypeParameter T, not a concrete type!
-    assert isinstance(result.args[0], TypeParameter)
-    assert result.args[0].name == "T"
+    # The element is the TypeParameter T, not a concrete type!
+    assert isinstance(result.element, TypeParameter)
+    assert result.element.name == "T"
 
 
 def test_nested_type_parameters():
@@ -37,23 +38,19 @@ def test_nested_type_parameters():
 
     result = extract_type(list[dict[str, T]])
 
-    # Outer: list[...]
-    assert isinstance(result, ParameterizedType)
-    assert result.origin.primitive == list
+    # Outer: list
+    assert isinstance(result, ListType)
 
     # Middle: dict[str, T]
-    dict_param = result.args[0]
-    assert isinstance(dict_param, ParameterizedType)
-    assert dict_param.origin.primitive == dict
-    assert len(dict_param.args) == 2
+    dict_type = result.element
+    assert isinstance(dict_type, DictType)
 
     # First arg of dict is str (concrete)
-    assert isinstance(dict_param.args[0], PrimitiveType)
-    assert dict_param.args[0].primitive == str
+    assert isinstance(dict_type.key, StrType)
 
     # Second arg of dict is T (type parameter)
-    assert isinstance(dict_param.args[1], TypeParameter)
-    assert dict_param.args[1].name == "T"
+    assert isinstance(dict_type.value, TypeParameter)
+    assert dict_type.value.name == "T"
 
 
 def test_bounded_type_parameter_in_annotation():
@@ -67,8 +64,7 @@ def test_bounded_type_parameter_in_annotation():
     assert isinstance(result, TypeParameter)
     assert result.name == "T"
     assert result.bound is not None
-    assert isinstance(result.bound, PrimitiveType)
-    assert result.bound.primitive == int
+    assert isinstance(result.bound, IntType)
 
 
 def test_multiple_type_parameters():
@@ -80,13 +76,11 @@ def test_multiple_type_parameters():
 
     result = extract_type(dict[K, V])
 
-    assert isinstance(result, ParameterizedType)
-    assert result.origin.primitive == dict
-    assert len(result.args) == 2
+    assert isinstance(result, DictType)
 
-    # Both args are type parameters
-    assert isinstance(result.args[0], TypeParameter)
-    assert result.args[0].name == "K"
+    # Both key and value are type parameters
+    assert isinstance(result.key, TypeParameter)
+    assert result.key.name == "K"
 
-    assert isinstance(result.args[1], TypeParameter)
-    assert result.args[1].name == "V"
+    assert isinstance(result.value, TypeParameter)
+    assert result.value.name == "V"

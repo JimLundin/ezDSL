@@ -2,8 +2,8 @@
 Type system domain for runtime type representation.
 
 This module defines the runtime type representation system used for schema
-generation and type extraction. It includes primitive types, type definitions,
-and utilities for working with generic types.
+generation and type extraction. It uses concrete types rather than generic
+wrappers to provide clear, self-documenting type definitions.
 """
 
 from __future__ import annotations
@@ -13,13 +13,7 @@ from dataclasses import dataclass
 from typing import dataclass_transform, get_args, get_origin, Any, ClassVar
 
 # =============================================================================
-# Primitives
-# =============================================================================
-
-PRIMITIVES: frozenset[type] = frozenset({float, int, str, bool, type(None)})
-
-# =============================================================================
-# Type Definitions
+# Type Definition Base
 # =============================================================================
 
 @dataclass_transform(frozen_default=True)
@@ -31,49 +25,99 @@ class TypeDef:
 
     def __init_subclass__(cls, tag: str | None = None, **kwargs):
         super().__init_subclass__(**kwargs)
-        if not cls.__dict__.get("__annotations__"):
+        if "__annotations__" not in cls.__dict__:
             return
         dataclass(frozen=True)(cls)
         cls._tag = tag or cls.__name__.lower().removesuffix("type")
         TypeDef._registry[cls._tag] = cls
 
 
-class PrimitiveType(TypeDef, tag="primitive"):
-    primitive: type
+# =============================================================================
+# Primitive Types (Concrete)
+# =============================================================================
 
+class IntType(TypeDef, tag="int"):
+    """Integer type."""
+    __annotations__ = {}  # Trigger dataclass conversion
+
+
+class FloatType(TypeDef, tag="float"):
+    """Floating point type."""
+    __annotations__ = {}  # Trigger dataclass conversion
+
+
+class StrType(TypeDef, tag="str"):
+    """String type."""
+    __annotations__ = {}  # Trigger dataclass conversion
+
+
+class BoolType(TypeDef, tag="bool"):
+    """Boolean type."""
+    __annotations__ = {}  # Trigger dataclass conversion
+
+
+class NoneType(TypeDef, tag="none"):
+    """None/null type."""
+    __annotations__ = {}  # Trigger dataclass conversion
+
+
+# =============================================================================
+# Container Types (Concrete)
+# =============================================================================
+
+class ListType(TypeDef, tag="list"):
+    """
+    List type with element type.
+
+    Example: list[int] → ListType(element=IntType())
+    """
+    element: TypeDef
+
+
+class DictType(TypeDef, tag="dict"):
+    """
+    Dictionary type with key and value types.
+
+    Example: dict[str, int] → DictType(key=StrType(), value=IntType())
+    """
+    key: TypeDef
+    value: TypeDef
+
+
+# =============================================================================
+# Domain Types
+# =============================================================================
 
 class NodeType(TypeDef, tag="node"):
+    """
+    AST Node type with return type.
+
+    Example: Node[float] → NodeType(returns=FloatType())
+    """
     returns: TypeDef
 
 
 class RefType(TypeDef, tag="ref"):
+    """
+    Reference type pointing to another type.
+
+    Example: Ref[Node[int]] → RefType(target=NodeType(returns=IntType()))
+    """
     target: TypeDef
 
 
 class UnionType(TypeDef, tag="union"):
+    """
+    Union of multiple types.
+
+    Example: int | str → UnionType(options=(IntType(), StrType()))
+    """
     options: tuple[TypeDef, ...]
-
-
-class ParameterizedType(TypeDef, tag="parameterized"):
-    """
-    Represents a generic type with type arguments applied.
-
-    This is the result of applying concrete type arguments to a generic type.
-
-    Examples:
-        - list[int] - list generic with int argument
-        - dict[str, float] - dict generic with str and float arguments
-        - Node[int] - Node generic with int argument
-        - NodeRef[float] - NodeRef type alias with float argument
-    """
-    name: str  # Full name like "list[int]"
-    origin: TypeDef  # The generic origin type
-    args: tuple[TypeDef, ...]  # Type arguments applied to the generic
 
 
 class TypeParameter(TypeDef, tag="param"):
     """
-    Represents a type parameter in PEP 695 syntax.
+    Type parameter in PEP 695 syntax.
 
     Type parameters are the placeholders in generic definitions that get
     substituted with concrete types when the generic is used.
