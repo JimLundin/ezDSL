@@ -54,26 +54,34 @@ class UnionType(TypeDef, tag="union"):
     options: tuple[TypeDef, ...]
 
 
-class GenericType(TypeDef, tag="generic"):
+class ParameterizedType(TypeDef, tag="parameterized"):
     """
-    Represents a parameterized/applied generic type.
+    Represents a generic type with type arguments applied.
 
-    Examples: list[int], dict[str, float], Node[int], NodeRef[float]
-    This is a concrete application of a generic type with specific type arguments.
+    This is the result of applying concrete type arguments to a generic type.
+
+    Examples:
+        - list[int] - list generic with int argument
+        - dict[str, float] - dict generic with str and float arguments
+        - Node[int] - Node generic with int argument
+        - NodeRef[float] - NodeRef type alias with float argument
     """
     name: str  # Full name like "list[int]"
     origin: TypeDef  # The generic origin type
-    args: tuple[TypeDef, ...]  # Type arguments
+    args: tuple[TypeDef, ...]  # Type arguments applied to the generic
 
 
-class TypeVarType(TypeDef, tag="typevar"):
+class TypeParameter(TypeDef, tag="param"):
     """
     Represents a type parameter in PEP 695 syntax.
 
+    Type parameters are the placeholders in generic definitions that get
+    substituted with concrete types when the generic is used.
+
     Examples:
-        - class Foo[T]: ...         # Unbounded type parameter
-        - class Foo[T: int]: ...    # Bounded type parameter (T must be int or subtype)
-        - type Pair[T] = tuple[T, T]  # Type parameter in type alias
+        - class Foo[T]: ...         # T is an unbounded type parameter
+        - class Foo[T: int]: ...    # T is bounded (must be int or subtype)
+        - type Pair[T] = tuple[T, T]  # T is a type parameter in the alias
     """
     name: str
     bound: TypeDef | None = None  # Upper bound constraint (e.g., T: int)

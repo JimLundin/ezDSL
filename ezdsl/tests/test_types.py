@@ -8,8 +8,8 @@ from ezdsl.types import (
     NodeType,
     RefType,
     UnionType,
-    GenericType,
-    TypeVarType,
+    ParameterizedType,
+    TypeParameter,
     PRIMITIVES,
 )
 
@@ -98,52 +98,52 @@ class TestUnionType:
             ut.options = (PrimitiveType(float),)
 
 
-class TestGenericType:
-    """Test GenericType."""
+class TestParameterizedType:
+    """Test ParameterizedType."""
 
-    def test_generic_type_creation(self):
-        """Test creating a GenericType."""
+    def test_parameterized_type_creation(self):
+        """Test creating a ParameterizedType."""
         origin = PrimitiveType(list)
         args = (PrimitiveType(int),)
-        gt = GenericType(name="list[int]", origin=origin, args=args)
-        assert gt.name == "list[int]"
-        assert gt.origin == origin
-        assert gt.args == args
-        assert gt._tag == "generic"
+        pt = ParameterizedType(name="list[int]", origin=origin, args=args)
+        assert pt.name == "list[int]"
+        assert pt.origin == origin
+        assert pt.args == args
+        assert pt._tag == "parameterized"
 
-    def test_generic_type_frozen(self):
-        """Test that GenericType is immutable."""
-        gt = GenericType(
+    def test_parameterized_type_frozen(self):
+        """Test that ParameterizedType is immutable."""
+        pt = ParameterizedType(
             name="list[int]",
             origin=PrimitiveType(list),
             args=(PrimitiveType(int),)
         )
         with pytest.raises((AttributeError, TypeError)):
-            gt.name = "list[str]"
+            pt.name = "list[str]"
 
 
-class TestTypeVarType:
-    """Test TypeVarType."""
+class TestTypeParameter:
+    """Test TypeParameter."""
 
-    def test_typevar_type_basic(self):
-        """Test creating a basic TypeVarType (unbounded)."""
-        tvt = TypeVarType(name="T")
-        assert tvt.name == "T"
-        assert tvt.bound is None
-        assert tvt._tag == "typevar"
+    def test_type_parameter_basic(self):
+        """Test creating a basic TypeParameter (unbounded)."""
+        tp = TypeParameter(name="T")
+        assert tp.name == "T"
+        assert tp.bound is None
+        assert tp._tag == "param"
 
-    def test_typevar_type_with_bound(self):
-        """Test TypeVarType with bound (like T: int)."""
+    def test_type_parameter_with_bound(self):
+        """Test TypeParameter with bound (like T: int)."""
         bound = PrimitiveType(int)
-        tvt = TypeVarType(name="T", bound=bound)
-        assert tvt.name == "T"
-        assert tvt.bound == bound
+        tp = TypeParameter(name="T", bound=bound)
+        assert tp.name == "T"
+        assert tp.bound == bound
 
-    def test_typevar_type_frozen(self):
-        """Test that TypeVarType is immutable."""
-        tvt = TypeVarType(name="T")
+    def test_type_parameter_frozen(self):
+        """Test that TypeParameter is immutable."""
+        tp = TypeParameter(name="T")
         with pytest.raises((AttributeError, TypeError)):
-            tvt.name = "U"
+            tp.name = "U"
 
 
 class TestTypeDefRegistry:
@@ -155,8 +155,8 @@ class TestTypeDefRegistry:
         assert "node" in TypeDef._registry
         assert "ref" in TypeDef._registry
         assert "union" in TypeDef._registry
-        assert "generic" in TypeDef._registry
-        assert "typevar" in TypeDef._registry
+        assert "parameterized" in TypeDef._registry
+        assert "param" in TypeDef._registry
 
     def test_type_registry_maps_to_classes(self):
         """Test that registry maps tags to correct classes."""
@@ -164,5 +164,5 @@ class TestTypeDefRegistry:
         assert TypeDef._registry["node"] == NodeType
         assert TypeDef._registry["ref"] == RefType
         assert TypeDef._registry["union"] == UnionType
-        assert TypeDef._registry["generic"] == GenericType
-        assert TypeDef._registry["typevar"] == TypeVarType
+        assert TypeDef._registry["parameterized"] == ParameterizedType
+        assert TypeDef._registry["param"] == TypeParameter

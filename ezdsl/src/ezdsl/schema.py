@@ -18,8 +18,8 @@ from ezdsl.types import (
     NodeType,
     RefType,
     UnionType,
-    GenericType,
-    TypeVarType,
+    ParameterizedType,
+    TypeParameter,
     PRIMITIVES,
     _substitute_type_params,
 )
@@ -37,7 +37,7 @@ def extract_type(py_type: Any) -> TypeDef:
     # Handle TypeVar (PEP 695 type parameters like class Foo[T]: ...)
     if isinstance(py_type, TypeVar):
         bound = getattr(py_type, "__bound__", None)
-        return TypeVarType(
+        return TypeParameter(
             name=py_type.__name__,
             bound=extract_type(bound) if bound is not None else None
         )
@@ -85,7 +85,7 @@ def extract_type(py_type: Any) -> TypeDef:
     if isinstance(py_type, types.UnionType):
         return UnionType(tuple(extract_type(a) for a in args))
 
-    # Generic types (fallback for other parameterized types)
+    # Parameterized types (generic types with arguments applied)
     if origin is not None and args:
         origin_name = getattr(origin, "__name__", str(origin))
         extracted_args = tuple(extract_type(a) for a in args)
@@ -94,7 +94,7 @@ def extract_type(py_type: Any) -> TypeDef:
         # For built-in types, we'll use a primitive representation
         origin_typedef = _extract_generic_origin(origin)
 
-        return GenericType(
+        return ParameterizedType(
             name=f"{origin_name}[{', '.join(str(a) for a in args)}]",
             origin=origin_typedef,
             args=extracted_args

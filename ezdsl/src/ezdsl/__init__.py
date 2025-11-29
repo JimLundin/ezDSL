@@ -19,8 +19,8 @@ from ezdsl.types import (
     NodeType,
     RefType,
     UnionType,
-    GenericType,
-    TypeVarType,
+    ParameterizedType,
+    TypeParameter,
 
     # Constants
     PRIMITIVES,
@@ -59,8 +59,8 @@ __all__ = [
     "NodeType",
     "RefType",
     "UnionType",
-    "GenericType",
-    "TypeVarType",
+    "ParameterizedType",
+    "TypeParameter",
 
     # Serialization
     "to_dict",

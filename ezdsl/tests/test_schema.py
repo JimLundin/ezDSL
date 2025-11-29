@@ -10,8 +10,8 @@ from ezdsl.types import (
     NodeType,
     RefType,
     UnionType,
-    GenericType,
-    TypeVarType,
+    ParameterizedType,
+    TypeParameter,
 )
 
 # Check Python version for version-specific tests
@@ -52,22 +52,22 @@ class TestExtractPrimitives:
         assert result.primitive == type(None)
 
 
-class TestExtractTypeVar:
+class TestExtractTypeParameter:
     """Test extracting TypeVar (PEP 695 type parameters)."""
 
-    def test_extract_simple_typevar(self):
+    def test_extract_simple_type_parameter(self):
         """Test extracting an unbounded TypeVar."""
         T = TypeVar("T")
         result = extract_type(T)
-        assert isinstance(result, TypeVarType)
+        assert isinstance(result, TypeParameter)
         assert result.name == "T"
         assert result.bound is None
 
-    def test_extract_bounded_typevar(self):
+    def test_extract_bounded_type_parameter(self):
         """Test extracting a TypeVar with bound (like T: int)."""
         T = TypeVar("T", bound=int)
         result = extract_type(T)
-        assert isinstance(result, TypeVarType)
+        assert isinstance(result, TypeParameter)
         assert result.name == "T"
         assert result.bound is not None
         assert isinstance(result.bound, PrimitiveType)
@@ -104,13 +104,13 @@ class TestExtractUnion:
         assert len(result.options) == 3
 
 
-class TestExtractGeneric:
-    """Test extracting generic types."""
+class TestExtractParameterized:
+    """Test extracting parameterized types."""
 
     def test_extract_list_int(self):
         """Test extracting list[int]."""
         result = extract_type(list[int])
-        assert isinstance(result, GenericType)
+        assert isinstance(result, ParameterizedType)
         assert result.name == "list[<class 'int'>]"
         assert isinstance(result.origin, PrimitiveType)
         assert result.origin.primitive == list
@@ -121,7 +121,7 @@ class TestExtractGeneric:
     def test_extract_dict_str_int(self):
         """Test extracting dict[str, int]."""
         result = extract_type(dict[str, int])
-        assert isinstance(result, GenericType)
+        assert isinstance(result, ParameterizedType)
         assert isinstance(result.origin, PrimitiveType)
         assert result.origin.primitive == dict
         assert len(result.args) == 2
@@ -133,20 +133,20 @@ class TestExtractGeneric:
     def test_extract_set_float(self):
         """Test extracting set[float]."""
         result = extract_type(set[float])
-        assert isinstance(result, GenericType)
+        assert isinstance(result, ParameterizedType)
         assert isinstance(result.origin, PrimitiveType)
         assert result.origin.primitive == set
         assert len(result.args) == 1
         assert isinstance(result.args[0], PrimitiveType)
         assert result.args[0].primitive == float
 
-    def test_extract_nested_generic(self):
-        """Test extracting nested generic types."""
+    def test_extract_nested_parameterized(self):
+        """Test extracting nested parameterized types."""
         result = extract_type(list[dict[str, int]])
-        assert isinstance(result, GenericType)
+        assert isinstance(result, ParameterizedType)
         assert result.origin.primitive == list
         assert len(result.args) == 1
-        assert isinstance(result.args[0], GenericType)
+        assert isinstance(result.args[0], ParameterizedType)
         assert result.args[0].origin.primitive == dict
 
 
@@ -160,7 +160,7 @@ class TestPEP695TypeAlias:
         # So list[int] is what we get, not a TypeAliasType wrapper
         # This test verifies that we can extract list[int] properly
         result = extract_type(list[int])
-        assert isinstance(result, GenericType)
+        assert isinstance(result, ParameterizedType)
         assert result.origin.primitive == list
         assert len(result.args) == 1
         assert result.args[0].primitive == int
@@ -172,7 +172,7 @@ class TestPEP695TypeAlias:
         Pair = globals()["Pair"]
 
         result = extract_type(Pair[int])
-        assert isinstance(result, GenericType)
+        assert isinstance(result, ParameterizedType)
         assert result.origin.primitive == tuple
         assert len(result.args) == 2
         assert result.args[0].primitive == int
@@ -214,7 +214,7 @@ class TestEdgeCases:
         result = extract_type(list[int] | dict[str, float] | None)
         assert isinstance(result, UnionType)
         assert len(result.options) == 3
-        assert isinstance(result.options[0], GenericType)
-        assert isinstance(result.options[1], GenericType)
+        assert isinstance(result.options[0], ParameterizedType)
+        assert isinstance(result.options[1], ParameterizedType)
         assert isinstance(result.options[2], PrimitiveType)
         assert result.options[2].primitive == type(None)
