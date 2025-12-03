@@ -7,16 +7,15 @@ type information for validation, documentation, and tooling support.
 
 from __future__ import annotations
 
-from dataclasses import fields as dc_fields
+import dataclasses
 from typing import (
     get_args,
     get_origin,
     get_type_hints,
     Any,
     TypeAliasType,
-    TypeVar as TypingTypeVar,
-    Literal as TypingLiteral,
-    get_args as typing_get_args,
+    TypeVar,
+    Literal,
 )
 import types
 
@@ -56,7 +55,7 @@ def extract_type(py_type: Any) -> TypeDef:
 
     # Handle typing.TypeVar (PEP 695 type parameters like class Foo[T]: ...)
     # Note: Even with PEP 695 syntax, Python internally uses typing.TypeVar
-    if isinstance(py_type, TypingTypeVar):
+    if isinstance(py_type, TypeVar):
         bound = getattr(py_type, "__bound__", None)
         return TypeParameter(
             name=py_type.__name__,
@@ -124,7 +123,7 @@ def extract_type(py_type: Any) -> TypeDef:
         return TupleType(elements=tuple(extract_type(arg) for arg in args))
 
     # Literal types
-    if origin is TypingLiteral:
+    if origin is Literal:
         if not args:
             raise ValueError("Literal type must have values")
         # Validate that all values are str, int, or bool
@@ -172,7 +171,7 @@ def node_schema(cls: type[Node[Any]]) -> dict:
         "returns": to_dict(_extract_node_returns(cls)),
         "fields": [
             {"name": f.name, "type": to_dict(extract_type(hints[f.name]))}
-            for f in dc_fields(cls)
+            for f in dataclasses.fields(cls)
             if not f.name.startswith("_")
         ],
     }
