@@ -79,8 +79,13 @@ class TestCustomTypeRegistration:
 
         # Use TypeDef.register decorator
         TypeDef.register(MyType)
-        assert TypeDef.get_registered_type(MyType) is not None
-        assert TypeDef.get_registered_type(MyType)._tag == "mytype"
+        result = TypeDef.get_registered_type(MyType)
+        assert result is not None
+        # New implementation returns CustomType instance with tag field
+        from nanodsl.types import CustomType
+
+        assert isinstance(result, CustomType)
+        assert result.tag == "mytype"
 
     def test_get_unregistered_type(self):
         """Test getting an unregistered type returns None."""

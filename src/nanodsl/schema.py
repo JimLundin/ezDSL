@@ -65,7 +65,8 @@ def extract_type(py_type: Any) -> TypeDef:
     # Handle custom user-defined types
     custom_typedef = TypeDef.get_registered_type(py_type)
     if custom_typedef is not None:
-        return custom_typedef()
+        # get_registered_type now returns TypeDef instance, not class
+        return custom_typedef
 
     # PEP 695 type aliases - automatically expand them
     if isinstance(origin, TypeAliasType):

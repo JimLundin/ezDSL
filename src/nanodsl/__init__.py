@@ -32,6 +32,8 @@ from nanodsl.types import (
     TypeParameterRef,
     ExternalType,
     CustomType,
+    ExternalTypeRecord,
+    CustomTypeRecord,
 )
 
 from nanodsl.serialization import (
@@ -79,6 +81,8 @@ __all__ = [
     "TypeParameterRef",
     "ExternalType",
     "CustomType",
+    "ExternalTypeRecord",
+    "CustomTypeRecord",
     # Serialization
     "to_dict",
     "from_dict",

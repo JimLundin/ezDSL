@@ -10,7 +10,33 @@ from __future__ import annotations
 
 import types
 from dataclasses import dataclass
-from typing import dataclass_transform, get_args, get_origin, Any, ClassVar
+from typing import dataclass_transform, get_args, get_origin, Any, ClassVar, Callable
+
+# =============================================================================
+# Type Registration Records
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class ExternalTypeRecord:
+    """Record for external type registration (function style)."""
+
+    python_type: type
+    module: str  # Full module path, e.g., "pandas.core.frame"
+    name: str  # Class name, e.g., "DataFrame"
+    tag: str
+    encode: Callable[[Any], dict]
+    decode: Callable[[dict], Any]
+
+
+@dataclass(frozen=True)
+class CustomTypeRecord:
+    """Record for custom type registration (decorator style)."""
+
+    python_type: type
+    tag: str
+    # encode/decode are methods on the class, not stored here
+
 
 # =============================================================================
 # Type Definition Base
@@ -23,9 +49,8 @@ class TypeDef:
 
     _tag: ClassVar[str]
     _registry: ClassVar[dict[str, type[TypeDef]]] = {}
-    _custom_types: ClassVar[dict[type, type[TypeDef]]] = (
-        {}
-    )  # Maps Python types to TypeDef classes
+    _external_types: ClassVar[dict[type, ExternalTypeRecord]] = {}
+    _custom_types: ClassVar[dict[type, CustomTypeRecord]] = {}
 
     def __init_subclass__(cls, tag: str | None = None):
         # Always convert to frozen dataclass
@@ -50,92 +75,123 @@ class TypeDef:
         python_type: type | None = None,
         *,
         tag: str | None = None,
-    ) -> type[TypeDef] | Any:
+        encode: Callable[[Any], dict] | None = None,
+        decode: Callable[[dict], Any] | None = None,
+    ) -> type | Callable[[type], type]:
         """
-        Register a custom type with the type system.
+        Register a type with the type system.
 
-        This method can be used either as a decorator or as a regular function call
-        to register existing types (like pandas DataFrame, numpy ndarray, etc.) with
-        the DSL type system.
+        Two registration styles:
+
+        1. External types (function style with encode/decode):
+           TypeDef.register(
+               pd.DataFrame,
+               tag="dataframe",
+               encode=lambda df: {"data": df.to_dict()},
+               decode=lambda d: pd.DataFrame(d["data"])
+           )
+           Creates ExternalType(module="pandas.core.frame", name="DataFrame", tag="dataframe")
+
+        2. Custom types (decorator style with encode/decode methods):
+           @TypeDef.register(tag="point")
+           class Point:
+               def encode(self) -> dict: ...
+               @classmethod
+               def decode(cls, data: dict) -> Self: ...
+           Creates CustomType(tag="point")
 
         Args:
             python_type: The Python class to register. If None, returns a decorator.
             tag: Optional tag name. Defaults to lowercase class name.
+            encode: Optional encode function (external types only).
+            decode: Optional decode function (external types only).
 
         Returns:
             If used as decorator: returns the original class unchanged
-            If used as function: returns the created TypeDef subclass
-
-        Examples:
-            # Register an existing type (e.g., pandas DataFrame)
-            >>> import pandas as pd
-            >>> TypeDef.register(pd.DataFrame)  # tag="dataframe"
-            >>> TypeDef.register(pd.DataFrame, tag="df")  # tag="df"
-
-            # Use as decorator for marker classes
-            >>> @TypeDef.register
-            ... class GraphicsContext:
-            ...     '''Marker for graphics context type.'''
-            ...     pass
-
-            # Use as decorator with custom tag
-            >>> @TypeDef.register(tag="matrix")
-            ... class Matrix:
-            ...     pass
+            If used as function: returns the original class
         """
+        # Determine registration style
+        is_external = encode is not None or decode is not None
 
-        def _create_typedef(py_type: type) -> type[TypeDef]:
-            """Create and register a TypeDef for the given Python type."""
-            # Determine the tag
-            type_tag = tag or py_type.__name__.lower()
-
-            # Check if already registered
-            if py_type in cls._custom_types:
-                existing = cls._custom_types[py_type]
-                # If same tag, it's idempotent
-                if existing._tag == type_tag:
-                    return existing
+        if is_external:
+            # External type registration (function style)
+            if python_type is None:
                 raise ValueError(
-                    f"Type {py_type} already registered with tag '{existing._tag}'. "
-                    f"Cannot re-register with tag '{type_tag}'."
+                    "External type registration requires python_type argument"
+                )
+            if encode is None or decode is None:
+                raise ValueError(
+                    "External type registration requires both encode and decode functions"
                 )
 
-            # Create TypeDef subclass dynamically
-            typedef_name = f"{py_type.__name__}Type"
+            # Get type info
+            type_tag = tag or python_type.__name__.lower()
+            module = python_type.__module__
+            name = python_type.__name__
 
-            # Build class dict
-            class_dict = {
-                "__module__": py_type.__module__,
-                "__doc__": f"Custom type definition for {py_type.__name__}.",
-            }
+            # Check if already registered
+            if python_type in cls._external_types:
+                existing = cls._external_types[python_type]
+                if existing.tag == type_tag:
+                    return python_type  # Idempotent
+                raise ValueError(
+                    f"Type {python_type} already registered as external type "
+                    f"with tag '{existing.tag}'"
+                )
+            if python_type in cls._custom_types:
+                raise ValueError(
+                    f"Type {python_type} already registered as custom type"
+                )
 
-            # Create the class - type() will call __init_subclass__ with our kwargs
-            typedef_cls = type(
-                typedef_name, (TypeDef,), class_dict, tag=type_tag
+            # Create and store record
+            record = ExternalTypeRecord(
+                python_type=python_type,
+                module=module,
+                name=name,
+                tag=type_tag,
+                encode=encode,
+                decode=decode,
             )
-
-            # Register the mapping
-            cls._custom_types[py_type] = typedef_cls
-
-            return typedef_cls
-
-        # If called without arguments as a decorator: @TypeDef.register
-        if python_type is not None:
-            _create_typedef(python_type)
-            # When used as decorator, return the original class unchanged
-            # This allows the marker class to still be used normally
+            cls._external_types[python_type] = record
             return python_type
 
-        # If called with arguments: @TypeDef.register(tag="foo")
-        # Return a decorator that will be applied to the class
-        def decorator(py_type: type) -> type:
-            _create_typedef(py_type)
-            return py_type
+        else:
+            # Custom type registration (decorator style)
+            def _register_custom(py_type: type) -> type:
+                type_tag = tag or py_type.__name__.lower()
 
-        return decorator
+                # Check if already registered
+                if py_type in cls._custom_types:
+                    existing = cls._custom_types[py_type]
+                    if existing.tag == type_tag:
+                        return py_type  # Idempotent
+                    raise ValueError(
+                        f"Type {py_type} already registered as custom type "
+                        f"with tag '{existing.tag}'"
+                    )
+                if py_type in cls._external_types:
+                    raise ValueError(
+                        f"Type {py_type} already registered as external type"
+                    )
+
+                # Note: encode/decode methods are optional for marker classes
+                # They're only required if you actually want to serialize/deserialize
+                # instances of this type
+
+                # Create and store record
+                record = CustomTypeRecord(python_type=py_type, tag=type_tag)
+                cls._custom_types[py_type] = record
+                return py_type
+
+            # If python_type provided, register directly
+            if python_type is not None:
+                return _register_custom(python_type)
+
+            # Otherwise return decorator
+            return _register_custom
 
     @classmethod
-    def get_registered_type(cls, python_type: type) -> type[TypeDef] | None:
+    def get_registered_type(cls, python_type: type) -> "TypeDef | None":
         """
         Get the registered TypeDef for a Python type.
 
@@ -143,9 +199,25 @@ class TypeDef:
             python_type: The Python type to look up
 
         Returns:
-            The TypeDef class registered for this type, or None if not registered
+            ExternalType or CustomType instance for this type, or None if not registered
         """
-        return cls._custom_types.get(python_type)
+        # Check external types first
+        if python_type in cls._external_types:
+            record = cls._external_types[python_type]
+            # Import here to avoid circular dependency
+            # ExternalType is defined below in this same file
+            return ExternalType(
+                module=record.module, name=record.name, tag=record.tag
+            )
+
+        # Check custom types
+        if python_type in cls._custom_types:
+            record = cls._custom_types[python_type]
+            # Import here to avoid circular dependency
+            # CustomType is defined below in this same file
+            return CustomType(tag=record.tag)
+
+        return None
 
 
 # =============================================================================
