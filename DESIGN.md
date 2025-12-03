@@ -6,7 +6,7 @@
 
 This document describes the design of a type-safe node system for building abstract syntax trees (ASTs) and domain-specific languages (DSLs). The system provides automatic registration, serialization, and schema generation for node types.
 
-The framework enables users to define **nodes** (computation/structure) parameterized by **types** (data containers). Serialization is handled by pluggable **format adapters**.
+The framework enables users to define **nodes** (computation/structure) parameterized by **types** (data containers). All schemas are represented as **dataclasses** which can be serialized to various formats via pluggable adapters.
 
 ---
 
@@ -100,14 +100,16 @@ Python built-ins are always available. No registration required:
 
 - **Primitives**: `int`, `float`, `str`, `bool`, `None`
 - **Containers**: `list[T]`, `dict[K, V]`, `set[T]`, `tuple[T, ...]`
-- **Unions**: `T | U` or `Union[T, U]`
+- **Unions**: `T | U`
+- **Literals**: `Literal["a", "b", "c"]` (enumerations)
 
-### Unregistered Types
+### External Types (Unregistered)
 
-Types that only flow between nodes at runtime. **No registration required.** Just use them:
+External types can flow between nodes at runtime without registration:
 
 ```python
 class DBConnection:
+    """External type - no registration needed."""
     pass
 
 class Connect(Node[DBConnection]):
@@ -117,122 +119,130 @@ class Query(Node[DataFrame]):
     connection: Node[DBConnection]  # just works
 ```
 
-Unregistered types can appear in `Node[T]` but **cannot be embedded as values** in node fields.
+**External types do NOT need registration** unless you want to:
+1. Serialize them as embedded values in nodes
+2. Include them in generated schemas/documentation
 
 ### Registered Types
 
-Types that need to be embedded as values in nodes require registration with encoding/decoding:
+Types require registration **only if** they need to be serialized as embedded values in nodes.
+
+**Two registration approaches:**
+
+#### 1. Function Registration (for existing classes)
+
+Use for types you don't control (e.g., pandas, numpy):
 
 ```python
+# Encode: takes instance, returns dict
+# Decode: takes dict, returns instance
 TypeDef.register(
     pd.DataFrame,
     tag="dataframe",
-    namespace="custom",
-    version="1.0",
     encode=lambda df: {"data": df.to_dict()},
     decode=lambda d: pd.DataFrame(d["data"]),
 )
 ```
 
-After registration, the type can be used both in `Node[T]` and as embedded field values.
+#### 2. Decorator Registration (for your own classes)
+
+Use for types you define:
+
+```python
+@TypeDef.register(tag="point")
+class Point:
+    """A 2D point."""
+    x: float
+    y: float
+
+    def encode(self) -> dict:
+        """Convert to dict representation."""
+        return {"x": self.x, "y": self.y}
+
+    @classmethod
+    def decode(cls, data: dict) -> Self:
+        """Construct from dict representation."""
+        return cls(x=data["x"], y=data["y"])
+```
+
+The decorated class must have:
+- `encode(self) -> dict` method
+- `decode(cls, data: dict) -> Self` classmethod
 
 ### Type Registration API
 
 ```python
 class TypeDef:
+    # Storage for registered types
+    _registry: ClassVar[dict[str, 'RegisteredType']] = {}
+
     @classmethod
     def register(
         cls,
         python_type: type | None = None,
         *,
         tag: str | None = None,
-        namespace: str = "custom",
-        version: str = "1.0",
         encode: Callable[[Any], dict] | None = None,
         decode: Callable[[dict], Any] | None = None,
-    ) -> type[TypeDef] | Any:
+    ) -> type | Any:
         """
         Register a custom type with the type system.
 
         Args:
             python_type: The Python class to register
-            tag: Identifier for schema/serialization (defaults to lowercase class name)
-            namespace: Namespace for the tag (defaults to "custom")
-            version: Version string for the type (defaults to "1.0")
-            encode: Function to serialize instances to dict/basic types
-            decode: Function to deserialize from dict/basic types
+            tag: Identifier for serialization (defaults to lowercase class name)
+            encode: Function to serialize instance to dict
+            decode: Function to deserialize from dict to instance
 
-        The full qualified identifier is: {namespace}.{tag}.{version}
+        For function registration:
+            - encode takes instance, returns dict
+            - decode takes dict, returns instance
 
-        Can be used as decorator or function call:
-            @TypeDef.register
-            class MyType: ...
+        For decorator registration:
+            - Class must have encode(self) -> dict method
+            - Class must have decode(cls, data: dict) -> Self classmethod
 
+        Examples:
+            # Function registration (external types)
             TypeDef.register(
                 pd.DataFrame,
-                tag="df",
+                tag="dataframe",
                 encode=lambda df: {"data": df.to_dict()},
                 decode=lambda d: pd.DataFrame(d["data"])
             )
+
+            # Decorator registration (your types)
+            @TypeDef.register(tag="point")
+            class Point:
+                x: float
+                y: float
+
+                def encode(self) -> dict:
+                    return {"x": self.x, "y": self.y}
+
+                @classmethod
+                def decode(cls, data: dict) -> Self:
+                    return cls(x=data["x"], y=data["y"])
         """
         ...
 
     @classmethod
-    def get_registered_type(cls, python_type: type) -> type[TypeDef] | None:
-        """Get the registered TypeDef for a Python type."""
+    def get_registered_type(cls, python_type: type) -> 'RegisteredType' | None:
+        """Get registration info for a Python type."""
         ...
 ```
 
-**Current Implementation Note**: The current implementation supports registration via `TypeDef.register()` but `encode`, `decode`, and `version` parameters are not yet implemented. Registration creates a TypeDef subclass that enables schema generation and serialization of the type reference.
-
-### TypeDef as Schema Representation
-
-TypeDef serves a dual purpose:
-1. **Runtime registration** of custom types
-2. **Schema representation** for serialization and documentation
-
-TypeDef instances ARE the schema. There is no separate schema type system. The TypeDef hierarchy (IntType, FloatType, ListType, etc.) represents type schemas as frozen dataclasses.
+**Implementation Note**: Instead of dynamically creating TypeDef subclasses, the system stores a `RegisteredType` record:
 
 ```python
-# These TypeDef classes are BOTH runtime types AND schema representations:
-
-class IntType(TypeDef, tag="int", namespace="std"):
-    """Integer type - used for both runtime and schema."""
-    pass
-
-class ListType(TypeDef, tag="list", namespace="std"):
-    """List type with element type."""
-    element: TypeDef  # Nested TypeDef = nested schema
-
-class NodeType(TypeDef, tag="node", namespace="std"):
-    """Node type with return type."""
-    returns: TypeDef
+@dataclass(frozen=True)
+class RegisteredType:
+    """Record of a registered custom type."""
+    python_type: type
+    tag: str
+    encode: Callable[[Any], dict]
+    decode: Callable[[dict], Any]
 ```
-
-When you call `extract_type(int)`, it returns `IntType()` - a TypeDef instance that represents the schema.
-
-### TypeRegistry
-
-The TypeRegistry is a unified view of all registered types, stored on the TypeDef class:
-
-```python
-class TypeDef:
-    _registry: ClassVar[dict[str, type[TypeDef]]] = {}
-    _custom_types: ClassVar[dict[type, type[TypeDef]]] = {}
-
-# _registry maps: qualified_tag -> TypeDef class
-# "std.int.1.0" -> IntType
-# "custom.dataframe.1.0" -> DataFrameType
-
-# _custom_types maps: Python type -> TypeDef class
-# pd.DataFrame -> DataFrameType
-# np.ndarray -> NDArrayType
-```
-
-This registry enables:
-- Looking up TypeDef by qualified tag during deserialization
-- Looking up TypeDef by Python type during schema extraction
-- Listing all registered types for documentation
 
 ---
 
@@ -240,10 +250,10 @@ This registry enables:
 
 ### Core Pattern
 
-Both `Node` and `TypeDef` use the same pattern:
+Nodes use automatic registration via `__init_subclass__`:
 
-- Inherit from base class
-- Optionally specify `tag`, `namespace`, and `version` in class definition
+- Inherit from `Node[T]`
+- Optionally specify `tag` in class definition
 - Automatically becomes a frozen dataclass
 - Automatically registered in a central registry
 
@@ -252,117 +262,61 @@ Both `Node` and `TypeDef` use the same pattern:
 ```python
 @dataclass_transform(frozen_default=True)
 class Node[T]:
-    _tag: ClassVar[str]              # Base tag (e.g., "add")
-    _namespace: ClassVar[str]         # Namespace (e.g., "math")
-    _version: ClassVar[str]           # Version (e.g., "1.0")
-    _qualified_tag: ClassVar[str]     # Full identifier (e.g., "math.add.1.0")
+    _tag: ClassVar[str]
     _registry: ClassVar[dict[str, type[Node]]] = {}
 
-    def __init_subclass__(
-        cls,
-        tag: str | None = None,
-        namespace: str | None = None,
-        version: str = "1.0"
-    ):
+    def __init_subclass__(cls, tag: str | None = None):
         dataclass(frozen=True)(cls)
 
-        # Store components
-        cls._namespace = namespace or ""
-        cls._tag = tag or cls.__name__.lower()
-        cls._version = version
+        # Determine tag
+        cls._tag = tag or cls.__name__.lower().removesuffix("node")
 
-        # Create qualified tag: namespace.tag.version
-        parts = [p for p in [namespace, cls._tag, version] if p]
-        cls._qualified_tag = ".".join(parts)
-
-        # Register by qualified tag
-        if existing := Node._registry.get(cls._qualified_tag):
+        # Register by tag
+        if existing := Node._registry.get(cls._tag):
             if existing is not cls:
                 raise TagCollisionError(
-                    f"Tag '{cls._qualified_tag}' already registered to {existing}. "
-                    f"Choose a different tag, namespace, or version."
+                    f"Tag '{cls._tag}' already registered to {existing}. "
+                    f"Choose a different tag."
                 )
 
-        Node._registry[cls._qualified_tag] = cls
+        Node._registry[cls._tag] = cls
 ```
 
 **Key Features:**
 - Generic type parameter `T` represents the node's return/value type
-- `_tag` is the base identifier (e.g., "add")
-- `_namespace` provides organizational grouping
-- `_version` enables schema evolution
-- `_qualified_tag` is the unique identifier: `{namespace}.{tag}.{version}`
-- `_registry` maps qualified tags to node classes for deserialization
+- `_tag` uniquely identifies the node type for serialization
+- `_registry` maps tags to node classes for deserialization
 - `__init_subclass__` hook automates dataclass conversion and registration
-- `@dataclass_transform` (PEP 681) tells type checkers that subclasses will be dataclasses
+- `@dataclass_transform` (PEP 681) enables IDE/type checker support
 - Frozen by default ensures immutability
-
-### Namespaces and Versioning
-
-Namespaces and versions are **central features** of the tagging system. Together they create unique qualified tags that prevent collisions and enable schema evolution:
-
-```python
-# Different namespaces, same tag and version
-class Add(Node[float], tag="add", namespace="math", version="1.0"):
-    left: Node[float]
-    right: Node[float]
-# Qualified tag: "math.add.1.0"
-
-class Add(Node[str], tag="add", namespace="string", version="1.0"):
-    parts: list[Node[str]]
-# Qualified tag: "string.add.1.0"
-
-# Same namespace and tag, different versions (schema evolution)
-class Query(Node[DataFrame], tag="query", namespace="db", version="1.0"):
-    sql: str
-# Qualified tag: "db.query.1.0"
-
-class Query(Node[DataFrame], tag="query", namespace="db", version="2.0"):
-    sql: str
-    timeout: float  # New field in v2
-# Qualified tag: "db.query.2.0"
-```
-
-**Standard Namespaces:**
-- `std` — Standard/built-in types (IntType, FloatType, ListType, etc.)
-- `custom` — Default namespace for registered user types
-- User-defined — Any custom namespace for domain-specific nodes
-
-**Versioning Strategy:**
-- Default version: `"1.0"`
-- Use semantic versioning (e.g., "1.0", "1.1", "2.0")
-- Increment version when making breaking schema changes
-- Keep old versions registered for backward compatibility
 
 ### Node Definition
 
+**Python 3.12+ syntax only** (using PEP 695 type parameters):
+
 ```python
 # Simple node
-class Literal(Node[float], tag="literal", version="1.0"):
+class Literal(Node[float], tag="literal"):
     value: float
 
-# Node with child references
-class Add(Node[float], tag="add", namespace="math", version="1.0"):
-    left: Node[float] | Ref[Node[float]]  # Can be inline or reference
-    right: Node[float] | Ref[Node[float]]
-
 # Generic node (unbounded)
-class Map[E, R](Node[list[R]], namespace="functional", version="1.0"):
+class Map[E, R](Node[list[R]], tag="map"):
     input: Node[list[E]]
     func: Node[R]
 
-# Generic node with bounds (Python 3.12+ syntax)
-class Add[T: int | float](Node[T], namespace="math", version="2.0"):
+# Generic node with bounds
+class Add[T: int | float](Node[T], tag="add"):
     left: Node[T]
     right: Node[T]
 
-# Generic node with bounds (older syntax)
-T = TypeVar('T', bound=int | float)
-
-class Add(Node[T], namespace="math", version="1.0"):
-    left: Node[T]
-    right: Node[T]
+# Node with multiple type parameters
+class MapReduce[E, M, R](Node[R], tag="mapreduce"):
+    input: Node[list[E]]
+    mapper: Node[M]
+    reducer: Node[R]
 ```
+
+**Not supported**: Legacy `TypeVar` syntax like `T = TypeVar('T', bound=int)`.
 
 ### Type Aliases
 
@@ -383,34 +337,39 @@ type Child[T] = Node[T] | Ref[Node[T]]
 | `Ref[Node[T]]` | Reference to a node | Reference: `{"$ref": "node-id"}` |
 | `Node[T] \| Ref[Node[T]]` | Either inline or reference | Depends on value |
 | `list[Node[T]]` | Multiple children | List of inline nodes |
-| `T` (registered type) | Embedded value | Depends on type's encode function |
+| `T` (registered type) | Embedded value | Uses type's encode function |
 
 ---
 
 ## TypeDef Schema Types
 
-TypeDef includes built-in schema types for representing all Python type annotations:
+TypeDef dataclasses represent type schemas. These are the canonical representation - dict/JSON forms are derived from them.
 
 ### Primitive Types
 
 ```python
-class IntType(TypeDef, tag="int", namespace="std", version="1.0"):
+@dataclass(frozen=True)
+class IntType(TypeDef, tag="int"):
     """Integer type."""
     pass
 
-class FloatType(TypeDef, tag="float", namespace="std", version="1.0"):
+@dataclass(frozen=True)
+class FloatType(TypeDef, tag="float"):
     """Floating point type."""
     pass
 
-class StrType(TypeDef, tag="str", namespace="std", version="1.0"):
+@dataclass(frozen=True)
+class StrType(TypeDef, tag="str"):
     """String type."""
     pass
 
-class BoolType(TypeDef, tag="bool", namespace="std", version="1.0"):
+@dataclass(frozen=True)
+class BoolType(TypeDef, tag="bool"):
     """Boolean type."""
     pass
 
-class NoneType(TypeDef, tag="none", namespace="std", version="1.0"):
+@dataclass(frozen=True)
+class NoneType(TypeDef, tag="none"):
     """None/null type."""
     pass
 ```
@@ -418,107 +377,151 @@ class NoneType(TypeDef, tag="none", namespace="std", version="1.0"):
 ### Container Types
 
 ```python
-class ListType(TypeDef, tag="list", namespace="std", version="1.0"):
+@dataclass(frozen=True)
+class ListType(TypeDef, tag="list"):
     """List type with element type."""
     element: TypeDef
 
-class DictType(TypeDef, tag="dict", namespace="std", version="1.0"):
+@dataclass(frozen=True)
+class DictType(TypeDef, tag="dict"):
     """Dictionary type with key and value types."""
     key: TypeDef
     value: TypeDef
 
-class SetType(TypeDef, tag="set", namespace="std", version="1.0"):
+@dataclass(frozen=True)
+class SetType(TypeDef, tag="set"):
     """Set type with element type."""
     element: TypeDef
 
-class TupleType(TypeDef, tag="tuple", namespace="std", version="1.0"):
+@dataclass(frozen=True)
+class TupleType(TypeDef, tag="tuple"):
     """Tuple type with fixed element types."""
-    elements: tuple[TypeDef, ...]  # Fixed-length tuple
+    elements: tuple[TypeDef, ...]
+```
+
+### Literal/Enumeration Type
+
+```python
+@dataclass(frozen=True)
+class LiteralType(TypeDef, tag="literal"):
+    """
+    Literal type representing enumeration of values.
+
+    Maps Python's Literal[...] type to enumeration schema.
+    Example: Literal["red", "green", "blue"] → LiteralType(values=("red", "green", "blue"))
+
+    Note: Does not support Python enum.Enum at this stage.
+    """
+    values: tuple[str | int | bool, ...]
 ```
 
 ### Domain Types
 
 ```python
-class NodeType(TypeDef, tag="node", namespace="std", version="1.0"):
+@dataclass(frozen=True)
+class NodeType(TypeDef, tag="node"):
     """AST Node type with return type."""
     returns: TypeDef
 
-class RefType(TypeDef, tag="ref", namespace="std", version="1.0"):
+@dataclass(frozen=True)
+class RefType(TypeDef, tag="ref"):
     """Reference type pointing to another type."""
     target: TypeDef
 
-class UnionType(TypeDef, tag="union", namespace="std", version="1.0"):
+@dataclass(frozen=True)
+class UnionType(TypeDef, tag="union"):
     """Union of multiple types."""
     options: tuple[TypeDef, ...]
 
-class TypeParameter(TypeDef, tag="param", namespace="std", version="1.0"):
-    """Type parameter in generic definitions."""
+@dataclass(frozen=True)
+class TypeParameter(TypeDef, tag="param"):
+    """
+    Type parameter in PEP 695 generic definitions.
+
+    Example: class Foo[T: int | float] → TypeParameter(name="T", bound=UnionType(...))
+    """
     name: str
-    bound: TypeDef | None = None  # Upper bound constraint
+    bound: TypeDef | None = None
 ```
 
-### Custom Type Definitions
-
-When you register a custom type, a TypeDef subclass is created:
+### Registered Custom Types
 
 ```python
-# User registers DataFrame
-TypeDef.register(pd.DataFrame, tag="dataframe", namespace="custom", version="1.0")
-
-# System creates:
-class DataFrameType(TypeDef, tag="dataframe", namespace="custom", version="1.0"):
-    """Custom type definition for DataFrame."""
-    pass
-
-# Usage in schemas
-df_type = DataFrameType()  # Instance represents the schema
+@dataclass(frozen=True)
+class CustomType(TypeDef, tag="custom"):
+    """Reference to a user-registered type."""
+    type_tag: str  # The tag used when registering
+    python_type: type  # The actual Python type
 ```
 
 ---
 
-## Schema Extraction and Node Schema
+## Schema Representation
+
+All schemas are **dataclasses**. They are the canonical representation. Serialization to dict/JSON/YAML/etc happens via format adapters.
+
+### Node Schema
+
+```python
+@dataclass(frozen=True)
+class NodeSchema:
+    """Complete schema for a node class."""
+    tag: str
+    type_params: tuple[TypeVarDef, ...]  # Type parameters from class[T, U, ...]
+    returns: TypeDef
+    fields: tuple[FieldSchema, ...]
+
+@dataclass(frozen=True)
+class FieldSchema:
+    """Schema for a node field."""
+    name: str
+    type: TypeDef
+
+@dataclass(frozen=True)
+class TypeVarDef:
+    """
+    Type variable definition from PEP 695 syntax.
+
+    Example:
+        class Foo[T]: ... → TypeVarDef(name="T", bound=None)
+        class Foo[T: int | float]: ... → TypeVarDef(name="T", bound=UnionType(...))
+    """
+    name: str
+    bound: TypeDef | None = None
+```
 
 ### Schema Conversion Functions
 
 ```python
 def extract_type(py_type: Any) -> TypeDef:
     """
-    Convert a Python type hint to a TypeDef instance.
+    Convert a Python type hint to a TypeDef dataclass.
 
     Examples:
-        extract_type(int) -> IntType()
-        extract_type(list[int]) -> ListType(element=IntType())
-        extract_type(Node[float]) -> NodeType(returns=FloatType())
+        extract_type(int) → IntType()
+        extract_type(list[int]) → ListType(element=IntType())
+        extract_type(Literal["a", "b"]) → LiteralType(values=("a", "b"))
+        extract_type(Node[float]) → NodeType(returns=FloatType())
     """
     ...
 
-def node_schema(cls: type[Node]) -> dict:
+def node_schema(cls: type[Node]) -> NodeSchema:
     """
-    Get schema for a node class.
+    Extract schema from a Node subclass.
 
-    Returns dict with structure:
-    {
-        "tag": str,           # Base tag
-        "namespace": str,     # Namespace
-        "version": str,       # Version
-        "qualified_tag": str, # Full identifier
-        "returns": dict,      # Serialized TypeDef
-        "fields": [
-            {"name": str, "type": dict},  # Serialized TypeDef
-            ...
-        ]
-    }
+    Returns NodeSchema dataclass, NOT dict.
     """
     ...
 
-def all_schemas() -> dict:
-    """Get all registered node schemas."""
+def all_schemas() -> dict[str, NodeSchema]:
+    """Get all registered node schemas as dataclasses."""
     ...
 ```
 
 ### Schema Examples
 
-**Simple type schemas:**
+**TypeDef examples (dataclasses):**
+
 ```python
 # int
 IntType()
@@ -538,6 +541,9 @@ TupleType(elements=(IntType(), StrType(), FloatType()))
 # int | str
 UnionType(options=(IntType(), StrType()))
 
+# Literal["red", "green", "blue"]
+LiteralType(values=("red", "green", "blue"))
+
 # Node[float]
 NodeType(returns=FloatType())
 
@@ -545,78 +551,135 @@ NodeType(returns=FloatType())
 RefType(target=NodeType(returns=IntType()))
 ```
 
-**Node schema example:**
+**NodeSchema example:**
 
 ```python
-class Add[T: int | float](Node[T], namespace="math", version="1.0"):
+class Add[T: int | float](Node[T], tag="add"):
     left: Node[T]
     right: Node[T]
 
-# Produces schema:
-{
-    "tag": "add",
-    "namespace": "math",
-    "version": "1.0",
-    "qualified_tag": "math.add.1.0",
-    "type_params": [
-        {
-            "name": "T",
-            "bound": {
-                "tag": "union",
-                "options": [
-                    {"tag": "int"},
-                    {"tag": "float"}
-                ]
-            }
-        }
-    ],
-    "returns": {"tag": "param", "name": "T"},
-    "fields": [
-        {
-            "name": "left",
-            "type": {
-                "tag": "node",
-                "returns": {"tag": "param", "name": "T"}
-            }
-        },
-        {
-            "name": "right",
-            "type": {
-                "tag": "node",
-                "returns": {"tag": "param", "name": "T"}
-            }
-        }
-    ]
-}
+# Produces NodeSchema dataclass:
+NodeSchema(
+    tag="add",
+    type_params=(
+        TypeVarDef(
+            name="T",
+            bound=UnionType(options=(IntType(), FloatType()))
+        ),
+    ),
+    returns=TypeParameter(name="T"),
+    fields=(
+        FieldSchema(name="left", type=NodeType(returns=TypeParameter(name="T"))),
+        FieldSchema(name="right", type=NodeType(returns=TypeParameter(name="T"))),
+    )
+)
 ```
 
 ---
 
 ## Serialization
 
-### Current Implementation
+### Format Adapters
 
-Simple, consistent serialization API. Pattern is `{"tag": qualified_tag, **fields}`:
+Format adapters convert dataclass schemas to/from specific formats. This is the **only** way to serialize - there are no built-in dict/JSON methods on the schemas.
 
-#### API
+#### Adapter Interface
 
 ```python
-to_dict(obj)   # Node | Ref | TypeDef -> dict
-to_json(obj)   # Node | Ref | TypeDef -> str
-from_dict(d)   # dict -> Node | Ref | TypeDef
-from_json(s)   # str -> Node | Ref | TypeDef
+from abc import ABC, abstractmethod
+
+class FormatAdapter(ABC):
+    """Base class for format-specific serialization."""
+
+    @abstractmethod
+    def serialize_node(self, node: Node) -> Any:
+        """Serialize a node instance."""
+        ...
+
+    @abstractmethod
+    def deserialize_node(self, data: Any) -> Node:
+        """Deserialize to a node instance."""
+        ...
+
+    @abstractmethod
+    def serialize_typedef(self, typedef: TypeDef) -> Any:
+        """Serialize a TypeDef dataclass."""
+        ...
+
+    @abstractmethod
+    def serialize_node_schema(self, schema: NodeSchema) -> Any:
+        """Serialize a NodeSchema dataclass."""
+        ...
 ```
 
-#### Serialization Format
+#### Built-in Adapters
+
+```python
+class JSONAdapter(FormatAdapter):
+    """JSON serialization adapter."""
+
+    def serialize_node(self, node: Node) -> dict:
+        """Serialize node to dict."""
+        return {
+            "tag": type(node)._tag,
+            **{
+                field.name: self._serialize_value(getattr(node, field.name))
+                for field in dataclass_fields(node)
+            }
+        }
+
+    def serialize_typedef(self, typedef: TypeDef) -> dict:
+        """Serialize TypeDef to dict."""
+        return {
+            "tag": type(typedef)._tag,
+            **{
+                field.name: self._serialize_value(getattr(typedef, field.name))
+                for field in dataclass_fields(typedef)
+            }
+        }
+
+class YAMLAdapter(FormatAdapter):
+    """YAML serialization adapter."""
+    ...
+
+class BinaryAdapter(FormatAdapter):
+    """Binary serialization adapter."""
+    ...
+```
+
+#### Usage Example
+
+```python
+# Create adapter
+json_adapter = JSONAdapter()
+
+# Serialize node
+node = Add(left=Literal(1.0), right=Literal(2.0))
+data = json_adapter.serialize_node(node)
+# → {"tag": "add", "left": {"tag": "literal", "value": 1.0}, "right": {"tag": "literal", "value": 2.0}}
+
+# Deserialize node
+restored = json_adapter.deserialize_node(data)
+
+# Serialize schema
+schema = node_schema(Add)  # Returns NodeSchema dataclass
+schema_json = json_adapter.serialize_node_schema(schema)
+
+# Different format
+yaml_adapter = YAMLAdapter()
+yaml_str = yaml_adapter.serialize_node(node)
+```
+
+### Serialization Format
 
 **Node serialization (inline):**
 ```python
 Add(left=Literal(1.0), right=Literal(2.0))
-# Becomes:
+# Becomes (via JSONAdapter):
 {
-    "tag": "math.add.1.0",
-    "left": {"tag": "literal.1.0", "value": 1.0},
-    "right": {"tag": "literal.1.0", "value": 2.0}
+    "tag": "add",
+    "left": {"tag": "literal", "value": 1.0},
+    "right": {"tag": "literal", "value": 2.0}
 }
 ```
 
@@ -627,78 +690,25 @@ Ref(id="node-123")
 {"$ref": "node-123"}
 ```
 
-**TypeDef serialization:**
+**Registered type serialization:**
 ```python
-ListType(element=IntType())
-# Becomes:
-{"tag": "std.list.1.0", "element": {"tag": "std.int.1.0"}}
-```
+# Given:
+@TypeDef.register(tag="point")
+class Point:
+    x: float
+    y: float
 
-#### Deserialization
+    def encode(self) -> dict:
+        return {"x": self.x, "y": self.y}
 
-Uses qualified tag to lookup node/type class from registry:
-```python
-data = {"tag": "math.add.1.0", "left": {...}, "right": {...}}
-node = from_dict(data)
-# Looks up Node._registry["math.add.1.0"] -> Add class
-# Recursively deserializes fields
-# Returns: Add(left=..., right=...)
-```
+    @classmethod
+    def decode(cls, data: dict) -> Self:
+        return cls(x=data["x"], y=data["y"])
 
-### Format Adapters (Future Design)
-
-Adapters will handle serialization to/from specific formats as a pluggable system. This replaces the current JSON-only focus.
-
-#### Adapter Interface
-
-```python
-from abc import ABC, abstractmethod
-
-class FormatAdapter(ABC):
-    @abstractmethod
-    def serialize_node(
-        self,
-        node: Node,
-        type_registry: TypeRegistry,
-    ) -> Any:
-        """Serialize a node instance to the output format."""
-        ...
-
-    @abstractmethod
-    def deserialize_node(
-        self,
-        data: Any,
-        node_registry: dict[str, type[Node]],
-        type_registry: TypeRegistry,
-    ) -> Node:
-        """Deserialize from the input format to a node instance."""
-        ...
-
-    @abstractmethod
-    def serialize_type(self, type_def: TypeDef) -> Any:
-        """Serialize a TypeDef to the output format."""
-        ...
-
-    @abstractmethod
-    def serialize_schema(self, schema: dict) -> Any:
-        """Serialize a node schema to the output format."""
-        ...
-```
-
-#### Usage Example
-
-```python
-# JSON adapter
-json_adapter = JSONAdapter()
-json_data = json_adapter.serialize_node(my_node, TypeDef._registry)
-
-# YAML adapter
-yaml_adapter = YAMLAdapter()
-yaml_str = yaml_adapter.serialize_node(my_node, TypeDef._registry)
-
-# Binary adapter
-binary_adapter = BinaryAdapter()
-binary_data = binary_adapter.serialize_node(my_node, TypeDef._registry)
+# Then:
+point = Point(x=1.0, y=2.0)
+# Serializes as:
+{"type": "point", "value": {"x": 1.0, "y": 2.0}}
 ```
 
 ---
@@ -720,29 +730,26 @@ class AST:
             raise NodeNotFoundError(f"Node '{ref.id}' not found in AST")
         return self.nodes[ref.id]
 
-    def to_dict(self) -> dict:
-        """Serialize entire AST to dict."""
+    def serialize(self, adapter: FormatAdapter) -> Any:
+        """Serialize entire AST using given adapter."""
         return {
             "root": self.root,
-            "nodes": {k: to_dict(v) for k, v in self.nodes.items()},
+            "nodes": {
+                node_id: adapter.serialize_node(node)
+                for node_id, node in self.nodes.items()
+            }
         }
 
-    def to_json(self) -> str:
-        """Serialize entire AST to JSON."""
-        return json.dumps(self.to_dict(), indent=2)
-
     @classmethod
-    def from_dict(cls, data: dict) -> AST:
-        """Deserialize AST from dict."""
+    def deserialize(cls, data: Any, adapter: FormatAdapter) -> 'AST':
+        """Deserialize AST using given adapter."""
         return cls(
             root=data["root"],
-            nodes={k: from_dict(v) for k, v in data["nodes"].items()}
+            nodes={
+                node_id: adapter.deserialize_node(node_data)
+                for node_id, node_data in data["nodes"].items()
+            }
         )
-
-    @classmethod
-    def from_json(cls, s: str) -> AST:
-        """Deserialize AST from JSON."""
-        return cls.from_dict(json.loads(s))
 ```
 
 **Responsibilities:**
@@ -769,22 +776,18 @@ class AST:
 ### Registration Errors
 
 #### Tag Collision
-Occurs when two node/type classes try to register with the same qualified tag:
-
 ```python
-class Add(Node[int], tag="add", namespace="math", version="1.0"):
+class Add(Node[int], tag="add"):
     pass
 
-class Add(Node[float], tag="add", namespace="math", version="1.0"):
+class Add(Node[float], tag="add"):
     pass
-# Raises: TagCollisionError("Tag 'math.add.1.0' already registered...")
+# Raises: TagCollisionError("Tag 'add' already registered...")
 ```
 
-**Solution**: Use different tag, namespace, or version.
+**Solution**: Use different tag.
 
 #### Invalid Type Annotation
-Occurs when a type annotation cannot be processed:
-
 ```python
 class BadNode(Node[int]):
     value: SomeUnknownType  # Cannot extract schema
@@ -799,8 +802,6 @@ class BadNode(Node[int]):
 ### Serialization Errors
 
 #### Unregistered Embedded Type
-Occurs when trying to serialize a node with an unregistered type as embedded value:
-
 ```python
 class UnregisteredClass:
     pass
@@ -809,20 +810,15 @@ class BadNode(Node[int]):
     value: UnregisteredClass  # Not registered!
 
 node = BadNode(value=UnregisteredClass())
-to_dict(node)  # Raises: UnregisteredTypeError(
-               #   "Cannot embed unregistered type UnregisteredClass. "
-               #   "Use TypeDef.register() to register this type."
-               # )
+adapter.serialize_node(node)  # Raises: UnregisteredTypeError
 ```
 
-**Solution**: Register the type with `TypeDef.register()` or use it only in `Node[T]` position (not as embedded value).
+**Solution**: Register the type with `TypeDef.register()` or use it only in `Node[T]` position.
 
 #### Unknown Tag During Deserialization
-Occurs when deserializing data with a tag not in the registry:
-
 ```python
-data = {"tag": "unknown.node.1.0", "value": 42}
-from_dict(data)  # Raises: UnknownTagError("Tag 'unknown.node.1.0' not found in registry")
+data = {"tag": "unknown", "value": 42}
+adapter.deserialize_node(data)  # Raises: UnknownTagError
 ```
 
 **Solution**: Ensure all node classes are imported/registered before deserialization.
@@ -830,27 +826,12 @@ from_dict(data)  # Raises: UnknownTagError("Tag 'unknown.node.1.0' not found in 
 ### Reference Errors
 
 #### Node Not Found
-Occurs when resolving a reference to a non-existent node:
-
 ```python
 ast = AST(root="main", nodes={"main": ...})
-ast.resolve(Ref(id="missing"))  # Raises: NodeNotFoundError("Node 'missing' not found in AST")
+ast.resolve(Ref(id="missing"))  # Raises: NodeNotFoundError
 ```
 
 **Solution**: Ensure all referenced nodes are present in the AST container.
-
-### Validation Errors (Future)
-
-Future validation hooks will enable custom validation:
-
-```python
-class PositiveNumber(Node[float]):
-    value: float
-
-    def __validate__(self):
-        if self.value <= 0:
-            raise ValidationError("Value must be positive")
-```
 
 ---
 
@@ -862,84 +843,67 @@ class PositiveNumber(Node[float]):
 
 ```python
 # Define nodes
-class Literal(Node[float], tag="literal", namespace="math"):
+class Literal(Node[float], tag="literal"):
     value: float
 
-class Add(Node[float], tag="add", namespace="math"):
+class Add(Node[float], tag="add"):
     left: Node[float]
     right: Node[float]
 
-class Multiply(Node[float], tag="multiply", namespace="math"):
+class Multiply(Node[float], tag="multiply"):
     left: Node[float]
     right: Node[float]
 
-class Negate(Node[float], tag="negate", namespace="math"):
-    operand: Node[float]
-
-# Build expression: -(2 + 3) * 4
+# Build expression: (2 + 3) * 4
 expr = Multiply(
-    left=Negate(
-        operand=Add(
-            left=Literal(2.0),
-            right=Literal(3.0)
-        )
-    ),
+    left=Add(left=Literal(2.0), right=Literal(3.0)),
     right=Literal(4.0)
 )
 
 # Serialize
-data = to_json(expr)
+adapter = JSONAdapter()
+data = adapter.serialize_node(expr)
 # Deserialize
-restored = from_json(data)
+restored = adapter.deserialize_node(data)
 ```
 
-#### 2. Conditional Logic
+#### 2. Conditional Logic with Literal Types
 
 ```python
-class If[T](Node[T], tag="if", namespace="logic"):
+class If[T](Node[T], tag="if"):
     condition: Node[bool]
     then_branch: Node[T]
     else_branch: Node[T]
 
-class Equal[T](Node[bool], tag="equal", namespace="logic"):
-    left: Node[T]
-    right: Node[T]
+class StringCase(Node[str], tag="string_case"):
+    """Pattern match on string literals."""
+    value: Node[str]
+    # Use Literal type for allowed cases
+    case: Literal["upper", "lower", "title"]
 
-class GreaterThan(Node[bool], tag="gt", namespace="logic"):
-    left: Node[float]
-    right: Node[float]
-
-# if x > 0 then x * 2 else -x
-x = Literal(5.0)
+# Build: if condition then uppercase else lowercase
 conditional = If(
-    condition=GreaterThan(left=x, right=Literal(0.0)),
-    then_branch=Multiply(left=x, right=Literal(2.0)),
-    else_branch=Negate(operand=x)
+    condition=some_bool_node,
+    then_branch=StringCase(value=text, case="upper"),
+    else_branch=StringCase(value=text, case="lower")
 )
 ```
 
-#### 3. Generic Map/Filter/Reduce
+#### 3. Generic Map/Filter
 
 ```python
-class Map[E, R](Node[list[R]], tag="map", namespace="functional"):
+class Map[E, R](Node[list[R]], tag="map"):
     input: Node[list[E]]
     func: Node[R]
 
-class Filter[T](Node[list[T]], tag="filter", namespace="functional"):
+class Filter[T](Node[list[T]], tag="filter"):
     input: Node[list[T]]
     predicate: Node[bool]
 
-class Reduce[E, A](Node[A], tag="reduce", namespace="functional"):
-    input: Node[list[E]]
-    accumulator: A
-    func: Node[A]
-
-# Example usage
+# Example: filter then map
 numbers = ListLiteral([1, 2, 3, 4, 5])
-doubled = Map(
-    input=numbers,
-    func=Lambda(body=Multiply(left=Var("x"), right=Literal(2)))
-)
+evens = Filter(input=numbers, predicate=IsEven())
+doubled = Map(input=evens, func=Double())
 ```
 
 ### Data/Structural AST Examples
@@ -947,18 +911,12 @@ doubled = Map(
 #### 1. Document Structure (HTML-like)
 
 ```python
-# Register custom types for attributes
-@TypeDef.register
-class Attributes:
-    """HTML attributes."""
-    pass
-
-class Element(Node['Element'], tag="element", namespace="html"):
+class Element(Node['Element'], tag="element"):
     tag_name: str
     attributes: dict[str, str]
-    children: list[Node['Element'] | TextNode]
+    children: list[Node['Element'] | Node[str]]
 
-class TextNode(Node[str], tag="text", namespace="html"):
+class TextNode(Node[str], tag="text"):
     content: str
 
 # Build document: <div class="container"><p>Hello</p></div>
@@ -975,80 +933,43 @@ doc = Element(
 )
 ```
 
-#### 2. Configuration Tree
+#### 2. Configuration with Registered Types
 
 ```python
-class Config(Node[dict], tag="config", namespace="app"):
+# Register config value type
+@TypeDef.register(tag="config_value")
+class ConfigValue:
+    """Configuration value with metadata."""
+    value: Any
+    source: str  # "default", "env", "file"
+
+    def encode(self) -> dict:
+        return {"value": self.value, "source": self.source}
+
+    @classmethod
+    def decode(cls, data: dict) -> Self:
+        return cls(value=data["value"], source=data["source"])
+
+class Config(Node[dict], tag="config"):
     name: str
     version: str
-    settings: dict[str, Node[Any]]
-
-class DatabaseConfig(Node[dict], tag="database", namespace="app"):
-    host: str
-    port: int
-    credentials: Node['Credentials']
-
-class Credentials(Node[dict], tag="credentials", namespace="app"):
-    username: str
-    password_ref: str  # Reference to secret store
+    settings: dict[str, ConfigValue]  # Embedded registered type
 
 # Build config
 config = Config(
     name="MyApp",
     version="1.0",
     settings={
-        "database": DatabaseConfig(
-            host="localhost",
-            port=5432,
-            credentials=Credentials(
-                username="admin",
-                password_ref="secret://db/password"
-            )
-        )
+        "timeout": ConfigValue(value=30, source="default"),
+        "api_key": ConfigValue(value="secret", source="env")
     }
 )
 ```
 
-#### 3. Schema Definition (Like JSON Schema)
+#### 3. Build System DAG
 
 ```python
-class SchemaNode(Node[dict], tag="schema", namespace="schema"):
-    title: str
-    description: str
-    type_def: Node['TypeSpec']
-
-class ObjectSpec(Node[dict], tag="object", namespace="schema"):
-    properties: dict[str, Node['TypeSpec']]
-    required: list[str]
-
-class StringSpec(Node[dict], tag="string", namespace="schema"):
-    min_length: int | None = None
-    max_length: int | None = None
-    pattern: str | None = None
-
-class NumberSpec(Node[dict], tag="number", namespace="schema"):
-    minimum: float | None = None
-    maximum: float | None = None
-
-# Define schema for a User object
-user_schema = SchemaNode(
-    title="User",
-    description="User account information",
-    type_def=ObjectSpec(
-        properties={
-            "username": StringSpec(min_length=3, max_length=20),
-            "age": NumberSpec(minimum=0, maximum=150),
-            "email": StringSpec(pattern=r"^[^@]+@[^@]+\.[^@]+$")
-        },
-        required=["username", "email"]
-    )
-)
-```
-
-#### 4. Build System DAG
-
-```python
-class Task(Node[str], tag="task", namespace="build"):
+class Task(Node[str], tag="task"):
     name: str
     command: str
     dependencies: list[Ref[Node[str]]]  # References to other tasks
@@ -1070,16 +991,10 @@ build_graph = AST(
             dependencies=[Ref(id="compile")],
             outputs=["app"]
         ),
-        "test": Task(
-            name="test",
-            command="./run_tests.sh",
-            dependencies=[Ref(id="link")],
-            outputs=["test_results.xml"]
-        ),
         "deploy": Task(
             name="deploy",
             command="./deploy.sh",
-            dependencies=[Ref(id="test"), Ref(id="link")],
+            dependencies=[Ref(id="link")],
             outputs=[]
         )
     }
@@ -1092,60 +1007,37 @@ for dep_ref in deploy_task.dependencies:
     print(f"Deploy depends on: {dep_task.name}")
 ```
 
-#### 5. Data Pipeline Graph
+#### 4. Data Pipeline with External Types
 
 ```python
-@TypeDef.register
+# External type - no registration needed since not embedded as value
 class DataFrame:
-    """Pandas DataFrame."""
+    """External DataFrame type."""
     pass
 
-class DataSource(Node[DataFrame], tag="source", namespace="data"):
+class DataSource(Node[DataFrame], tag="source"):
     path: str
-    format: str  # "csv", "parquet", etc.
+    format: Literal["csv", "parquet", "json"]  # Use Literal for enums
 
-class Transform(Node[DataFrame], tag="transform", namespace="data"):
+class Transform(Node[DataFrame], tag="transform"):
     input: Ref[Node[DataFrame]]
     operation: str
     params: dict[str, Any]
-
-class Join(Node[DataFrame], tag="join", namespace="data"):
-    left: Ref[Node[DataFrame]]
-    right: Ref[Node[DataFrame]]
-    on: str
-    how: str  # "inner", "left", "outer"
-
-class DataSink(Node[None], tag="sink", namespace="data"):
-    input: Ref[Node[DataFrame]]
-    path: str
-    format: str
 
 # Build pipeline
 pipeline = AST(
     root="output",
     nodes={
         "users": DataSource(path="users.csv", format="csv"),
-        "orders": DataSource(path="orders.csv", format="csv"),
-        "filtered_orders": Transform(
-            input=Ref(id="orders"),
+        "filtered": Transform(
+            input=Ref(id="users"),
             operation="filter",
-            params={"condition": "amount > 100"}
+            params={"condition": "age > 18"}
         ),
-        "joined": Join(
-            left=Ref(id="users"),
-            right=Ref(id="filtered_orders"),
-            on="user_id",
-            how="inner"
-        ),
-        "aggregated": Transform(
-            input=Ref(id="joined"),
-            operation="groupby",
-            params={"by": ["user_id"], "agg": {"amount": "sum"}}
-        ),
-        "output": DataSink(
-            input=Ref(id="aggregated"),
-            path="user_totals.parquet",
-            format="parquet"
+        "output": Transform(
+            input=Ref(id="filtered"),
+            operation="select",
+            params={"columns": ["name", "age"]}
         )
     }
 )
@@ -1155,15 +1047,15 @@ pipeline = AST(
 
 ## Design Principles
 
-1. **Immutability**: All nodes are frozen dataclasses
+1. **Immutability**: All nodes and schemas are frozen dataclasses
 2. **Type Safety**: Leverage Python 3.12+ generics for compile-time type checking
 3. **Automatic Registration**: No manual registry management
-4. **Uniform Pattern**: Same approach for Node and TypeDef
-5. **Namespace-based Organization**: Prevent collisions and provide structure
-6. **Versioning Support**: Enable schema evolution and backward compatibility
-7. **Minimal Ceremony**: Unregistered types work without registration
-8. **Unified Schema Representation**: TypeDef instances serve as both runtime types and schemas
-9. **Pluggable Serialization**: Format adapters separate concerns
+4. **Dataclass-First**: Schemas are dataclasses; serialization is secondary
+5. **Minimal Registration**: External types don't need registration unless serialized
+6. **Simple Tagging**: Just `tag`, no namespace or version complexity
+7. **Modern Python**: PEP 695 type parameters only (`class[T]` syntax)
+8. **Pluggable Serialization**: Format adapters handle all serialization
+9. **Two Registration Styles**: Function for external types, decorator for owned types
 10. **Reference Support**: First-class support for node references and graph structures
 
 ---
@@ -1172,9 +1064,9 @@ pipeline = AST(
 
 | Category | Registration Required? | Can be Node[T] parameter? | Can be embedded value? | Example |
 |----------|------------------------|---------------------------|------------------------|---------|
-| Built-in types | No | Yes | Yes | `int`, `list[str]` |
-| Unregistered types | No | Yes | No | `DBConnection` |
-| Registered types | Yes | Yes | Yes | `DataFrame` |
+| Built-in types | No | Yes | Yes | `int`, `list[str]`, `Literal["a", "b"]` |
+| External types | No (unless embedded) | Yes | Only if registered | `DBConnection`, `DataFrame` |
+| Registered types | Yes (for embedding) | Yes | Yes | Registered `Point`, `ConfigValue` |
 
 ---
 
@@ -1184,53 +1076,23 @@ pipeline = AST(
 
 - ✅ Node base class with automatic registration
 - ✅ TypeDef base class with automatic registration
-- ✅ Namespace support for both nodes and types
+- ✅ Namespace support (to be simplified to tag-only)
 - ✅ Generic node support with type parameters
 - ✅ Type registration via `TypeDef.register()`
-- ✅ Schema extraction to dicts via `node_schema()` and `all_schemas()`
-- ✅ Serialization via `to_dict/from_dict/to_json/from_json`
+- ✅ Schema extraction via `node_schema()` and `all_schemas()`
+- ✅ Serialization via `to_dict/from_dict/to_json/from_json` (to be replaced with adapters)
 - ✅ AST container with reference resolution
-- ✅ Unregistered type support (any type can be used in Node[T])
-- ✅ TypeDef as unified schema representation
 
-### Future Work
+### Needs Implementation
 
-- ⏳ **Version support**: Add `version` parameter to Node and TypeDef registration
-- ⏳ **Encoding/decoding functions**: Implement `encode` and `decode` parameters in `TypeDef.register()`
-- ⏳ **SetType and TupleType**: Add schema types for `set[T]` and `tuple[T, ...]`
-- ⏳ **Format adapter interface**: Implement pluggable serialization system
-- ⏳ **Validation hooks**: Add `__validate__()` method for custom validation
-- ⏳ **Error types**: Define specific exception classes (TagCollisionError, UnregisteredTypeError, etc.)
+- ⏳ **Simplify to tag-only**: Remove namespace and version from Node/TypeDef
+- ⏳ **RegisteredType record**: Replace dynamic TypeDef generation with simple record
+- ⏳ **Encode/decode in registration**: Support both function and method styles
+- ⏳ **LiteralType**: Add support for Python `Literal[...]` type
+- ⏳ **SetType and TupleType**: Add schema dataclasses for these containers
+- ⏳ **Dataclass schemas**: Return NodeSchema dataclasses instead of dicts
+- ⏳ **Format adapters**: Implement JSONAdapter, YAMLAdapter, etc.
+- ⏳ **Remove legacy TypeVar**: Only support `class[T]` syntax
+- ⏳ **Error types**: Define specific exception classes
 - ⏳ **Node traversal utilities**: Add helpers for walking/transforming ASTs
-- ⏳ **Type inference system**: Infer concrete types for generic nodes
 - ⏳ **Pretty printing and visualization**: Tools for displaying ASTs
-
----
-
-## Migration Strategy
-
-### Phase 1: Current State
-- `node_schema()` returns dicts
-- TypeDef instances used internally
-- JSON-only serialization
-
-### Phase 2: Add Versioning
-- Add `version` parameter to `__init_subclass__`
-- Update registry to use qualified tags with version
-- Maintain backward compatibility with version="1.0" default
-
-### Phase 3: Implement Encoding/Decoding
-- Add `encode` and `decode` to `TypeDef.register()`
-- Support serialization of embedded custom type values
-- Add tests for round-trip serialization
-
-### Phase 4: Format Adapters
-- Implement `FormatAdapter` interface
-- Create JSONAdapter wrapping current implementation
-- Add YAMLAdapter, BinaryAdapter, etc.
-- Provide migration guide for users
-
-### Phase 5: Enhanced Schemas
-- Add SetType and TupleType
-- Add validation hooks
-- Implement schema versioning and migration tools
