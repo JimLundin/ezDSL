@@ -243,11 +243,32 @@ class TestFromDict:
             from_dict(data)
 
     def test_missing_tag_raises_error(self) -> None:
-        """Test that missing tag field raises KeyError."""
+        """Test that missing tag field raises KeyError with clear message."""
         data = {"value": 42}  # No 'tag' field
 
-        with pytest.raises(KeyError):
+        with pytest.raises(KeyError, match="Missing required 'tag' field"):
             from_dict(data)
+
+    def test_missing_ref_id_raises_error(self) -> None:
+        """Test that missing id field for ref raises KeyError."""
+        data = {"tag": "ref"}  # Missing 'id' field
+
+        with pytest.raises(KeyError, match="Missing required 'id' field for ref"):
+            from_dict(data)
+
+    def test_unknown_tag_lists_available_tags(self) -> None:
+        """Test that unknown tag error lists available tags."""
+        data = {"tag": "completely_unknown_tag_xyz"}
+
+        with pytest.raises(ValueError) as exc_info:
+            from_dict(data)
+
+        error_msg = str(exc_info.value)
+        # Should mention the unknown tag
+        assert "completely_unknown_tag_xyz" in error_msg
+        # Should list available tags
+        assert "Available node tags" in error_msg
+        assert "Available typedef tags" in error_msg
 
 
 class TestRoundTripSerialization:
