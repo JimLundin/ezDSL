@@ -2,8 +2,29 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, ClassVar, dataclass_transform
+
+# Tag pattern: must start with lowercase letter, followed by lowercase letters, digits, hyphens, or underscores
+_TAG_PATTERN = re.compile(r"^[a-z][a-z0-9_-]*$")
+
+
+def _validate_tag(tag: str) -> None:
+    """Validate that a tag follows the required format.
+
+    Args:
+        tag: Tag string to validate
+
+    Raises:
+        ValueError: If tag does not match required format
+    """
+    if not _TAG_PATTERN.match(tag):
+        msg = (
+            f"Invalid tag '{tag}'. Tags must start with a lowercase letter "
+            "and contain only lowercase letters, digits, hyphens, and underscores."
+        )
+        raise ValueError(msg)
 
 
 @dataclass(frozen=True)
@@ -23,7 +44,10 @@ class Node[T]:
 
     def __init_subclass__(cls, tag: str | None = None) -> None:
         dataclass(frozen=True)(cls)
-        cls._tag = tag or cls.__name__.lower().removesuffix("node")
+        cls._tag = tag if tag is not None else cls.__name__.lower().removesuffix("node")
+
+        # Validate tag format
+        _validate_tag(cls._tag)
 
         if existing := Node.registry.get(cls._tag):
             if existing is not cls:

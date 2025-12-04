@@ -85,6 +85,73 @@ class TestNodeTags:
 
         assert MyNode._tag == "my-custom-tag"
 
+    def test_tag_with_numbers(self) -> None:
+        """Test tags with numbers."""
+
+        class MyNode(Node[int], tag="node123"):
+            value: int
+
+        assert MyNode._tag == "node123"
+
+
+class TestTagValidation:
+    """Test tag format validation."""
+
+    def test_tag_starting_with_uppercase_rejected(self) -> None:
+        """Test that tags starting with uppercase are rejected."""
+        with pytest.raises(ValueError, match="Invalid tag 'MyTag'"):
+
+            class InvalidNode(Node[int], tag="MyTag"):
+                value: int
+
+    def test_tag_starting_with_number_rejected(self) -> None:
+        """Test that tags starting with numbers are rejected."""
+        with pytest.raises(ValueError, match="Invalid tag '123tag'"):
+
+            class InvalidNode(Node[int], tag="123tag"):
+                value: int
+
+    def test_tag_with_spaces_rejected(self) -> None:
+        """Test that tags with spaces are rejected."""
+        with pytest.raises(ValueError, match="Invalid tag 'my tag'"):
+
+            class InvalidNode(Node[int], tag="my tag"):
+                value: int
+
+    def test_tag_with_special_chars_rejected(self) -> None:
+        """Test that tags with special characters are rejected."""
+        with pytest.raises(ValueError, match="Invalid tag 'my@tag'"):
+
+            class InvalidNode(Node[int], tag="my@tag"):
+                value: int
+
+    def test_auto_generated_invalid_tag_rejected(self) -> None:
+        """Test that auto-generated invalid tags are rejected."""
+        # Class name that would generate an invalid tag starting with underscore
+        with pytest.raises(ValueError, match="Invalid tag"):
+
+            class _TestNode(Node[int]):  # Would generate '_test' as tag
+                value: int
+
+    def test_tag_validation_error_message(self) -> None:
+        """Test that tag validation error message is helpful."""
+        with pytest.raises(ValueError) as exc_info:
+
+            class BadNode(Node[int], tag="Bad-Tag"):  # Uppercase
+                value: int
+
+        error_msg = str(exc_info.value)
+        assert "Invalid tag" in error_msg
+        assert "lowercase letter" in error_msg
+        assert "lowercase letters, digits, hyphens, and underscores" in error_msg
+
+    def test_empty_tag_rejected(self) -> None:
+        """Test that empty tags are rejected."""
+        with pytest.raises(ValueError, match="Invalid tag"):
+
+            class EmptyTagNode(Node[int], tag=""):
+                value: int
+
 
 class TestNodeRegistry:
     """Test Node registry functionality."""
