@@ -1,9 +1,4 @@
-"""
-Schema extraction domain for runtime type reflection and schema generation.
-
-This module provides utilities to reflect on Python types and extract runtime
-type information for validation, documentation, and tooling support.
-"""
+"""Schema extraction and type reflection utilities."""
 
 from __future__ import annotations
 
@@ -42,10 +37,6 @@ from nanodsl.types import (
     _substitute_type_params,
 )
 
-# =============================================================================
-# Schema Dataclasses
-# =============================================================================
-
 
 @dataclass(frozen=True)
 class FieldSchema:
@@ -65,18 +56,11 @@ class NodeSchema:
     fields: tuple[FieldSchema, ...]
 
 
-# =============================================================================
-# Schema Extraction
-# =============================================================================
-
-
 def extract_type(py_type: Any) -> TypeDef:
     """Convert Python type annotation to TypeDef."""
     origin = get_origin(py_type)
     args = get_args(py_type)
 
-    # Handle typing.TypeVar (PEP 695 type parameters like class Foo[T]: ...)
-    # Note: Even with PEP 695 syntax, Python internally uses typing.TypeVar
     if isinstance(py_type, TypeVar):
         bound = getattr(py_type, "__bound__", None)
         return TypeParameter(
@@ -84,33 +68,22 @@ def extract_type(py_type: Any) -> TypeDef:
             bound=extract_type(bound) if bound is not None else None,
         )
 
-    # Handle custom user-defined types
     custom_typedef = TypeDef.get_registered_type(py_type)
     if custom_typedef is not None:
-        # get_registered_type now returns TypeDef instance, not class
         return custom_typedef
 
-    # PEP 695 type aliases - automatically expand them
+    # Expand PEP 695 type aliases
     if isinstance(origin, TypeAliasType):
-        # Get the type parameters and create substitution mapping
         type_params = getattr(origin, "__type_params__", ())
         if len(type_params) != len(args):
             raise ValueError(
                 f"Type alias {origin.__name__} expects {len(type_params)} "
                 f"arguments but got {len(args)}"
             )
-
-        # Create substitution mapping: {T: int, U: str, ...}
         substitutions = dict(zip(type_params, args))
-
-        # Get the template and substitute type parameters
-        template = origin.__value__
-        substituted = _substitute_type_params(template, substitutions)
-
-        # Extract the substituted type
+        substituted = _substitute_type_params(origin.__value__, substitutions)
         return extract_type(substituted)
 
-    # Concrete primitive types
     if py_type is int:
         return IntType()
     if py_type is float:
@@ -122,7 +95,6 @@ def extract_type(py_type: Any) -> TypeDef:
     if py_type is type(None):
         return NoneType()
 
-    # Container types
     if origin is list:
         if not args:
             raise ValueError("list type must have an element type")
@@ -141,15 +113,11 @@ def extract_type(py_type: Any) -> TypeDef:
     if origin is tuple:
         if not args:
             raise ValueError("tuple type must have element types")
-        # Handle tuple[X, ...] (variable length) vs tuple[X, Y, Z] (fixed length)
-        # For now, we only support fixed-length heterogeneous tuples
         return TupleType(elements=tuple(extract_type(arg) for arg in args))
 
-    # Literal types
     if origin is Literal:
         if not args:
             raise ValueError("Literal type must have values")
-        # Validate that all values are str, int, or bool
         for val in args:
             if not isinstance(val, (str, int, bool)):
                 raise ValueError(
@@ -157,18 +125,15 @@ def extract_type(py_type: Any) -> TypeDef:
                 )
         return LiteralType(values=args)
 
-    # Node types
     if origin is not None and isinstance(origin, type) and issubclass(origin, Node):
         return NodeType(extract_type(args[0]) if args else NoneType())
 
     if isinstance(py_type, type) and issubclass(py_type, Node):
         return NodeType(_extract_node_returns(py_type))
 
-    # Ref types
     if origin is Ref:
         return RefType(extract_type(args[0]) if args else NoneType())
 
-    # UnionType (types.UnionType, created by | operator in Python 3.10+)
     if isinstance(py_type, types.UnionType):
         return UnionType(tuple(extract_type(a) for a in args))
 
@@ -190,7 +155,6 @@ def node_schema(cls: type[Node[Any]]) -> NodeSchema:
     """Get schema for a node class."""
     hints = get_type_hints(cls)
 
-    # Extract type parameters (PEP 695 generic classes)
     type_params: list[TypeParameter] = []
     if hasattr(cls, "__type_params__"):
         for param in cls.__type_params__:
@@ -203,7 +167,6 @@ def node_schema(cls: type[Node[Any]]) -> NodeSchema:
                     )
                 )
 
-    # Extract fields
     fields: list[FieldSchema] = []
     for f in dataclasses.fields(cls):
         if not f.name.startswith("_"):

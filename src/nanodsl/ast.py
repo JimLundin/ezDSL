@@ -1,9 +1,4 @@
-"""
-AST container domain for managing complete abstract syntax trees.
-
-This module provides the AST container class that manages complete abstract
-syntax trees with flat node storage and reference resolution.
-"""
+"""AST container with flat node storage and reference resolution."""
 
 from __future__ import annotations
 
@@ -14,10 +9,6 @@ from typing import Any
 from nanodsl.nodes import Node, Ref
 from nanodsl.serialization import to_dict, from_dict
 
-# =============================================================================
-# AST Container
-# =============================================================================
-
 
 @dataclass
 class AST:
@@ -27,6 +18,7 @@ class AST:
     nodes: dict[str, Node[Any]]
 
     def resolve[X](self, ref: Ref[X]) -> X:
+        """Resolve a reference to its node."""
         return self.nodes[ref.id]
 
     def to_dict(self) -> dict:

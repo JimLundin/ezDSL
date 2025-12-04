@@ -1,8 +1,4 @@
-"""
-ezdsl - Easy Domain Specific Languages
-
-A minimal AST node type system for Python 3.12+
-"""
+"""nanoDSL - Type-safe AST node system for Python 3.12+"""
 
 from nanodsl.nodes import (
     # Core types

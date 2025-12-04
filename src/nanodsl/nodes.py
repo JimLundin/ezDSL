@@ -1,18 +1,9 @@
-"""
-Node system domain for AST node infrastructure.
-
-This module provides the core AST node infrastructure with automatic registration
-and generic type parameters. Nodes are immutable and type-safe.
-"""
+"""Core AST node infrastructure with automatic registration."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import dataclass_transform, ClassVar, Any
-
-# =============================================================================
-# Core Types
-# =============================================================================
 
 
 @dataclass(frozen=True)
@@ -31,11 +22,8 @@ class Node[T]:
 
     def __init_subclass__(cls, tag: str | None = None):
         dataclass(frozen=True)(cls)
-
-        # Determine tag
         cls._tag = tag or cls.__name__.lower().removesuffix("node")
 
-        # Check for collisions
         if existing := Node._registry.get(cls._tag):
             if existing is not cls:
                 raise ValueError(
