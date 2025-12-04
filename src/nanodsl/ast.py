@@ -34,8 +34,8 @@ class AST:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AST:
-        nodes = {k: cast(Node[Any], from_dict(v)) for k, v in data["nodes"].items()}
-        return cls(data["root"], nodes)
+        nodes = {k: from_dict(v) for k, v in data["nodes"].items()}
+        return cls(data["root"], nodes)  # type: ignore[arg-type]
 
     @classmethod
     def from_json(cls, s: str) -> AST:
