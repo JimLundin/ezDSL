@@ -18,6 +18,7 @@ def _validate_tag(tag: str) -> None:
 
     Raises:
         ValueError: If tag does not match required format
+
     """
     if not _TAG_PATTERN.match(tag):
         msg = (

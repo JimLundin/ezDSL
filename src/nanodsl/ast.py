@@ -63,6 +63,7 @@ class AST:
         Raises:
             KeyError: If required keys ('root' or 'nodes') are missing
             ValueError: If node deserialization fails
+
         """
         if "root" not in data:
             msg = "Missing required key 'root' in AST data"
