@@ -1,25 +1,23 @@
-"""Integration tests for nanoDSL - end-to-end workflows."""
+"""Integration tests for typeDSL - end-to-end workflows."""
 
-from nanodsl import (
+from typedsl import (
     AST,
     Child,
     Node,
     NodeRef,
     Ref,
     all_schemas,
-    extract_type,
     from_json,
     node_schema,
     to_json,
 )
-from nanodsl.types import (
+from typedsl.types import (
     FloatType,
     IntType,
     ListType,
     NodeType,
     RefType,
     StrType,
-    TypeParameter,
 )
 
 
@@ -362,8 +360,15 @@ class TestEndToEndUserScenarios:
                 "users": Table(name="users"),
                 "orders": Table(name="orders"),
                 "active_users": Filter(source=Ref(id="users"), condition="active=true"),
-                "join": Join(left=Ref(id="active_users"), right=Ref(id="orders"), on="user_id"),
-                "result": Select(source=Ref(id="join"), columns=["name", "order_id", "total"]),
+                "join": Join(
+                    left=Ref(id="active_users"),
+                    right=Ref(id="orders"),
+                    on="user_id",
+                ),
+                "result": Select(
+                    source=Ref(id="join"),
+                    columns=["name", "order_id", "total"],
+                ),
             },
         )
 
@@ -407,14 +412,16 @@ class TestEndToEndUserScenarios:
             nodes={
                 "raw_data": DataSource(path="data.csv"),
                 "preprocessed": Preprocess(
-                    input=Ref(id="raw_data"), steps=["normalize", "remove_nulls"]
+                    input=Ref(id="raw_data"),
+                    steps=["normalize", "remove_nulls"],
                 ),
                 "model": Model(name="random_forest", params={"n_estimators": 100.0}),
                 "training": Train(data=Ref(id="preprocessed"), model=Ref(id="model")),
                 "test_data": DataSource(path="test.csv"),
                 "test_prep": Preprocess(input=Ref(id="test_data"), steps=["normalize"]),
                 "evaluation": Evaluate(
-                    trained=Ref(id="training"), test_data=Ref(id="test_prep")
+                    trained=Ref(id="training"),
+                    test_data=Ref(id="test_prep"),
                 ),
             },
         )

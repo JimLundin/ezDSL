@@ -1,4 +1,4 @@
-# nanoDSL
+# typeDSL
 
 A type-safe node system for building Abstract Syntax Trees (ASTs) and Domain-Specific Languages (DSLs) in Python 3.12+.
 
@@ -13,7 +13,7 @@ A type-safe node system for building Abstract Syntax Trees (ASTs) and Domain-Spe
 ## Installation
 
 ```bash
-pip install nanodsl
+pip install typedsl
 ```
 
 Requires Python 3.12 or later.
@@ -25,7 +25,7 @@ Requires Python 3.12 or later.
 Nodes are the building blocks of your AST. Each node is parameterized by the type it produces:
 
 ```python
-from nanodsl import Node
+from typedsl import Node
 
 class Literal(Node[float]):
     value: float
@@ -49,7 +49,7 @@ That's it! Your classes are automatically:
 ### Serialize to JSON
 
 ```python
-from nanodsl import to_json, from_json
+from typedsl import to_json, from_json
 
 # Serialize
 json_str = to_json(expr)
@@ -68,7 +68,7 @@ assert restored == expr
 ### Extract Schema Information
 
 ```python
-from nanodsl import node_schema, all_schemas
+from typedsl import node_schema, all_schemas
 
 # Get schema for a specific node
 schema = node_schema(Add)
@@ -128,7 +128,7 @@ class MySpecialNode(Node[int], tag="special"):
 For graph structures with shared nodes, use `Ref`:
 
 ```python
-from nanodsl import Node, Ref, AST
+from typedsl import Node, Ref, AST
 
 class Literal(Node[float]):
     value: float
@@ -162,10 +162,10 @@ Use `Ref[Node[T]]` when you need:
 
 ## Type Definitions
 
-nanoDSL provides a complete type system for schema representation:
+typeDSL provides a complete type system for schema representation:
 
 ```python
-from nanodsl import (
+from typedsl import (
     IntType, FloatType, StrType, BoolType, NoneType,
     ListType, DictType, SetType, TupleType,
     NodeType, RefType, UnionType, LiteralType,
@@ -186,7 +186,7 @@ Register third-party types for serialization:
 
 ```python
 import pandas as pd
-from nanodsl import TypeDef
+from typedsl import TypeDef
 
 # Register pandas DataFrame
 TypeDef.register(
@@ -206,7 +206,7 @@ class DataSource(Node[pd.DataFrame]):
 
 **Warning**: Only deserialize JSON/dict data from trusted sources.
 
-The `from_dict()` and `from_json()` functions use the node registry to instantiate classes. While nanoDSL itself doesn't execute arbitrary code during deserialization, you should be aware of:
+The `from_dict()` and `from_json()` functions use the node registry to instantiate classes. While typeDSL itself doesn't execute arbitrary code during deserialization, you should be aware of:
 
 1. **Registered External Types**: If you register external types with custom `decode` functions, those functions will be executed during deserialization
 2. **Node Construction**: Deserialized data is used to construct Node instances - ensure your Node classes don't have side effects in `__post_init__`
@@ -234,7 +234,7 @@ node = from_dict(user_input)
 ## Complete Example: Expression Evaluator
 
 ```python
-from nanodsl import Node, to_json, from_json
+from typedsl import Node, to_json, from_json
 from typing import Literal
 
 # Define expression nodes

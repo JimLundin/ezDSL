@@ -2,8 +2,8 @@
 
 from typing import TypeVar
 
-from nanodsl.schema import extract_type
-from nanodsl.types import (
+from typedsl.schema import extract_type
+from typedsl.types import (
     DictType,
     FloatType,
     IntType,
@@ -41,7 +41,7 @@ def test_generic_node_field_extraction() -> None:
 
 def test_complex_generic_node_field() -> None:
     """Test: class MyNode[T]:
-              args: list[dict[str, T]]
+              args: list[dict[str, T]].
 
     This should serialize as:
     - ListType
@@ -72,7 +72,7 @@ def test_complex_generic_node_field() -> None:
 
 def test_bounded_type_parameter_in_generic_node() -> None:
     """Test: class NumericNode[T: float]:
-              value: T
+              value: T.
 
     The TypeVar should capture the bound.
     """

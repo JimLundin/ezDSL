@@ -1,11 +1,11 @@
-"""Tests for nanodsl.adapters module."""
+"""Tests for typedsl.adapters module."""
 
 import pytest
 
-from nanodsl.adapters import JSONAdapter
-from nanodsl.nodes import Node, Ref
-from nanodsl.schema import node_schema
-from nanodsl.types import (
+from typedsl.adapters import JSONAdapter
+from typedsl.nodes import Node, Ref
+from typedsl.schema import node_schema
+from typedsl.types import (
     BoolType,
     DictType,
     FloatType,

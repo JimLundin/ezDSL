@@ -1,5 +1,5 @@
 [project]
-name = "nanoDSL"
+name = "typeDSL"
 version = "0.1.0"
 description = "A type-safe node system for building ASTs and DSLs in Python 3.12+"
 readme = "README.md"

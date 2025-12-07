@@ -1,16 +1,15 @@
-"""Tests for nanodsl.serialization module."""
+"""Tests for typedsl.serialization module."""
 
 import json
 
 import pytest
 
-from nanodsl.nodes import Node, Ref
-from nanodsl.serialization import from_dict, from_json, to_dict, to_json
-from nanodsl.types import (
+from typedsl.nodes import Node, Ref
+from typedsl.serialization import from_dict, from_json, to_dict, to_json
+from typedsl.types import (
     FloatType,
     IntType,
     ListType,
-    TypeDef,
     UnionType,
 )
 

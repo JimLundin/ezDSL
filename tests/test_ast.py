@@ -1,12 +1,12 @@
-"""Tests for nanodsl.ast module."""
+"""Tests for typedsl.ast module."""
 
 import json
 from typing import Any
 
 import pytest
 
-from nanodsl.ast import AST, Interpreter
-from nanodsl.nodes import Node, Ref
+from typedsl.ast import AST, Interpreter
+from typedsl.nodes import Node, Ref
 
 
 class TestASTBasics:
@@ -32,6 +32,7 @@ class TestASTBasics:
 
         assert ast.root == ""
         assert len(ast.nodes) == 0
+
 
 class TestASTResolve:
     """Test AST.resolve() reference resolution."""
@@ -358,7 +359,11 @@ class TestASTRoundTrip:
             count: int
 
         original = AST(
-            root="d1", nodes={"d1": Data(text="hello", count=1), "d2": Data(text="world", count=2)}
+            root="d1",
+            nodes={
+                "d1": Data(text="hello", count=1),
+                "d2": Data(text="world", count=2),
+            },
         )
 
         serialized = original.to_dict()
@@ -659,7 +664,8 @@ class TestInterpreterBasics:
                     case Const(value=v):
                         return v
                     case _:
-                        raise NotImplementedError(f"Unknown node: {type(node)}")
+                        msg = f"Unknown node: {type(node)}"
+                        raise NotImplementedError(msg)
 
         ast = AST(root="c", nodes={"c": Const(value=42.0)})
         result = Calculator(ast, None).run()
@@ -678,7 +684,8 @@ class TestInterpreterBasics:
                     case Var(name=n):
                         return self.ctx[n]
                     case _:
-                        raise NotImplementedError(f"Unknown node: {type(node)}")
+                        msg = f"Unknown node: {type(node)}"
+                        raise NotImplementedError(msg)
 
         ast = AST(root="x", nodes={"x": Var(name="x")})
         result = Calculator(ast, {"x": 10.0, "y": 20.0}).run()
@@ -696,7 +703,9 @@ class TestInterpreterBasics:
                 # Access ast from within eval
                 return len(self.ast.nodes)
 
-        ast = AST(root="a", nodes={"a": Num(value=1), "b": Num(value=2), "c": Num(value=3)})
+        ast = AST(
+            root="a", nodes={"a": Num(value=1), "b": Num(value=2), "c": Num(value=3)}
+        )
         result = Inspector(ast, None).run()
 
         assert result == 3
@@ -939,7 +948,8 @@ class TestInterpreterComplexExamples:
                     case BinOp(op="/", left=l, right=r):
                         return self.eval(self.resolve(l)) / self.eval(self.resolve(r))
                     case _:
-                        raise NotImplementedError(f"Unknown node: {type(node)}")
+                        msg = f"Unknown node: {type(node)}"
+                        raise NotImplementedError(msg)
 
         # Expression: (x + 2) * (y - 1)
         ast = AST(
@@ -1011,10 +1021,14 @@ class TestInterpreterComplexExamples:
                     case Add(left=l, right=r):
                         # Handle both inline nodes and refs
                         left_val = (
-                            self.eval(self.resolve(l)) if isinstance(l, Ref) else self.eval(l)
+                            self.eval(self.resolve(l))
+                            if isinstance(l, Ref)
+                            else self.eval(l)
                         )
                         right_val = (
-                            self.eval(self.resolve(r)) if isinstance(r, Ref) else self.eval(r)
+                            self.eval(self.resolve(r))
+                            if isinstance(r, Ref)
+                            else self.eval(r)
                         )
                         return left_val + right_val
                     case _:

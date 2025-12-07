@@ -1,8 +1,8 @@
-"""Tests for nanodsl.types module."""
+"""Tests for typedsl.types module."""
 
 import pytest
 
-from nanodsl.types import (
+from typedsl.types import (
     BoolType,
     DictType,
     ExternalType,
@@ -225,7 +225,7 @@ class TestNestedTypes:
             options=(
                 ListType(element=IntType()),
                 DictType(key=StrType(), value=FloatType()),
-            )
+            ),
         )
         assert len(ut.options) == 2
         assert isinstance(ut.options[0], ListType)

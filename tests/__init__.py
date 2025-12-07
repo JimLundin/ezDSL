@@ -1,1 +1,1 @@
-"""Tests for ezdsl package."""
+"""Tests for typedsl package."""

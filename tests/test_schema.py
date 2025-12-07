@@ -1,11 +1,11 @@
-"""Tests for nanodsl.schema module."""
+"""Tests for typedsl.schema module."""
 
 from typing import TypeVar
 
 import pytest
 
-from nanodsl.schema import extract_type
-from nanodsl.types import (
+from typedsl.schema import extract_type
+from typedsl.types import (
     BoolType,
     DictType,
     FloatType,
@@ -199,9 +199,7 @@ class TestEdgeCases:
         """Test that list without element type raises ValueError."""
         # This test may not be possible with Python's typing system
         # as list without args gives list directly, not a parameterized type
-        pass
 
     def test_dict_with_wrong_arg_count_raises(self) -> None:
         """Test that dict with wrong number of args raises ValueError."""
         # This is also hard to test as Python's typing system enforces this
-        pass

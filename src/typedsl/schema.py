@@ -14,8 +14,8 @@ from typing import (
     get_type_hints,
 )
 
-from nanodsl.nodes import Node, Ref
-from nanodsl.types import (
+from typedsl.nodes import Node, Ref
+from typedsl.types import (
     BoolType,
     DictType,
     FloatType,
@@ -122,7 +122,7 @@ def extract_type(py_type: Any) -> TypeDef:
             msg = "Literal type must have values"
             raise ValueError(msg)
         for val in args:
-            if not isinstance(val, (str, int, bool)):
+            if not isinstance(val, str | int | bool):
                 msg = f"Literal values must be str, int, or bool, got {type(val)}"
                 raise TypeError(msg)
         return LiteralType(values=args)
@@ -166,7 +166,7 @@ def node_schema(cls: type[Node[Any]]) -> NodeSchema:
                     TypeParameter(
                         name=param.__name__,
                         bound=extract_type(bound) if bound is not None else None,
-                    )
+                    ),
                 )
 
     node_fields = (

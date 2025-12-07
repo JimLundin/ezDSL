@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from nanodsl.adapters import JSONAdapter
-from nanodsl.nodes import Node, Ref
-from nanodsl.types import TypeDef
+from typedsl.adapters import JSONAdapter
+from typedsl.nodes import Node, Ref
+from typedsl.types import TypeDef
 
 _adapter = JSONAdapter()
 
@@ -23,6 +23,7 @@ def to_dict(obj: Node[Any] | Ref[Any] | TypeDef) -> dict[str, Any]:
 
     Raises:
         ValueError: If object type cannot be serialized
+
     """
     if isinstance(obj, Ref):
         return {"tag": "ref", "id": obj.id}
@@ -46,6 +47,7 @@ def from_dict(data: dict[str, Any]) -> Node[Any] | Ref[Any] | TypeDef:
     Raises:
         KeyError: If required 'tag' field is missing
         ValueError: If tag is not recognized
+
     """
     if "tag" not in data:
         msg = "Missing required 'tag' field in data"
@@ -87,6 +89,7 @@ def to_json(obj: Node[Any] | Ref[Any] | TypeDef) -> str:
 
     Raises:
         ValueError: If object type cannot be serialized
+
     """
     return json.dumps(to_dict(obj), indent=2)
 
@@ -104,5 +107,6 @@ def from_json(s: str) -> Node[Any] | Ref[Any] | TypeDef:
         json.JSONDecodeError: If string is not valid JSON
         KeyError: If required fields are missing
         ValueError: If tag is not recognized
+
     """
     return from_dict(json.loads(s))

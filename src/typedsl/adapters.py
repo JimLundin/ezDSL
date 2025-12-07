@@ -6,11 +6,11 @@ from abc import ABC, abstractmethod
 from dataclasses import fields
 from typing import TYPE_CHECKING, Any, TypedDict
 
-from nanodsl.nodes import Node, Ref
-from nanodsl.types import TypeDef
+from typedsl.nodes import Node, Ref
+from typedsl.types import TypeDef
 
 if TYPE_CHECKING:
-    from nanodsl.schema import NodeSchema
+    from typedsl.schema import NodeSchema
 
 
 class SerializedFieldSchema(TypedDict):
@@ -115,7 +115,7 @@ class JSONAdapter(FormatAdapter):
             return {"tag": "ref", "id": value.id}
         if isinstance(value, TypeDef):
             return self.serialize_typedef(value)
-        if isinstance(value, (list, tuple)):
+        if isinstance(value, list | tuple):
             return [self._serialize_value(item) for item in value]
         if isinstance(value, dict):
             return {k: self._serialize_value(v) for k, v in value.items()}

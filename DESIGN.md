@@ -1028,6 +1028,6 @@ class PolarsSource(Node[pl.DataFrame], tag="pl_source"):
 
 These features are intentionally excluded from the current implementation for simplicity, but may be added in future versions:
 
-- 🔮 **CustomType with decorator registration**: Support for `@nanodsl.register` decorator to register custom Python types
+- 🔮 **CustomType with decorator registration**: Support for `@typedsl.register` decorator to register custom Python types
 - 🔮 **ExternalType with decorator-based registration**: Decorator approach for registering third-party types
 - 🔮 **Generic register signatures**: Type-safe `encode[T]` and `decode[T]` functions with decorators

@@ -1,8 +1,8 @@
-"""Tests for nanodsl.nodes module."""
+"""Tests for typedsl.nodes module."""
 
 import pytest
 
-from nanodsl.nodes import Child, Node, NodeRef, Ref
+from typedsl.nodes import Child, Node, NodeRef, Ref
 
 
 class TestNodeBasics:

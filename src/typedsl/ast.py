@@ -7,13 +7,13 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
-from nanodsl.nodes import Node
-from nanodsl.serialization import from_dict, to_dict
+from typedsl.nodes import Node
+from typedsl.serialization import from_dict, to_dict
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from nanodsl.nodes import Ref
+    from typedsl.nodes import Ref
 
 
 @dataclass

@@ -2,8 +2,8 @@
 
 from typing import TypeVar
 
-from nanodsl.schema import extract_type
-from nanodsl.types import (
+from typedsl.schema import extract_type
+from typedsl.types import (
     DictType,
     IntType,
     ListType,
