@@ -1,10 +1,11 @@
 """Tests for nanodsl.ast module."""
 
 import json
+from typing import Any
 
 import pytest
 
-from nanodsl.ast import AST
+from nanodsl.ast import AST, Interpreter
 from nanodsl.nodes import Node, Ref
 
 
@@ -630,3 +631,404 @@ class TestASTIntegrationExamples:
         restored = AST.from_dict(serialized)
         assert restored.root == ast.root
         assert len(restored.nodes) == len(ast.nodes)
+
+
+class TestInterpreterBasics:
+    """Test basic Interpreter functionality."""
+
+    def test_interpreter_is_abstract(self) -> None:
+        """Test that Interpreter cannot be instantiated directly."""
+
+        class Num(Node[int], tag="num_interp_abstract"):
+            value: int
+
+        ast = AST(root="n", nodes={"n": Num(value=1)})
+
+        with pytest.raises(TypeError, match="abstract"):
+            Interpreter(ast, None)  # type: ignore[abstract]
+
+    def test_simple_interpreter(self) -> None:
+        """Test a simple interpreter that evaluates constants."""
+
+        class Const(Node[float], tag="const_interp_simple"):
+            value: float
+
+        class Calculator(Interpreter[None, float]):
+            def eval(self, node: Node[Any]) -> float:
+                match node:
+                    case Const(value=v):
+                        return v
+                    case _:
+                        raise NotImplementedError(f"Unknown node: {type(node)}")
+
+        ast = AST(root="c", nodes={"c": Const(value=42.0)})
+        result = Calculator(ast, None).run()
+
+        assert result == 42.0
+
+    def test_interpreter_with_context(self) -> None:
+        """Test interpreter that uses context for variable lookup."""
+
+        class Var(Node[float], tag="var_interp_ctx"):
+            name: str
+
+        class Calculator(Interpreter[dict[str, float], float]):
+            def eval(self, node: Node[Any]) -> float:
+                match node:
+                    case Var(name=n):
+                        return self.ctx[n]
+                    case _:
+                        raise NotImplementedError(f"Unknown node: {type(node)}")
+
+        ast = AST(root="x", nodes={"x": Var(name="x")})
+        result = Calculator(ast, {"x": 10.0, "y": 20.0}).run()
+
+        assert result == 10.0
+
+    def test_interpreter_has_ast_access(self) -> None:
+        """Test that interpreter has access to the AST."""
+
+        class Num(Node[int], tag="num_interp_ast_access"):
+            value: int
+
+        class Inspector(Interpreter[None, int]):
+            def eval(self, node: Node[Any]) -> int:
+                # Access ast from within eval
+                return len(self.ast.nodes)
+
+        ast = AST(root="a", nodes={"a": Num(value=1), "b": Num(value=2), "c": Num(value=3)})
+        result = Inspector(ast, None).run()
+
+        assert result == 3
+
+
+class TestInterpreterResolve:
+    """Test Interpreter.resolve() functionality."""
+
+    def test_resolve_returns_node(self) -> None:
+        """Test that resolve returns the referenced node."""
+
+        class Val(Node[int], tag="val_interp_resolve"):
+            value: int
+
+        class Wrapper(Node[int], tag="wrapper_interp_resolve"):
+            inner: Ref[Node[int]]
+
+        class Evaluator(Interpreter[None, int]):
+            def eval(self, node: Node[Any]) -> int:
+                match node:
+                    case Val(value=v):
+                        return v
+                    case Wrapper(inner=ref):
+                        resolved = self.resolve(ref)
+                        return self.eval(resolved)
+                    case _:
+                        raise NotImplementedError
+
+        ast = AST(
+            root="w",
+            nodes={
+                "v": Val(value=42),
+                "w": Wrapper(inner=Ref(id="v")),
+            },
+        )
+        result = Evaluator(ast, None).run()
+
+        assert result == 42
+
+    def test_resolve_with_refs_in_expression(self) -> None:
+        """Test resolving refs in a binary expression."""
+
+        class Const(Node[float], tag="const_interp_expr"):
+            value: float
+
+        class Add(Node[float], tag="add_interp_expr"):
+            left: Ref[Node[float]]
+            right: Ref[Node[float]]
+
+        class Calculator(Interpreter[None, float]):
+            def eval(self, node: Node[Any]) -> float:
+                match node:
+                    case Const(value=v):
+                        return v
+                    case Add(left=l, right=r):
+                        return self.eval(self.resolve(l)) + self.eval(self.resolve(r))
+                    case _:
+                        raise NotImplementedError
+
+        ast = AST(
+            root="sum",
+            nodes={
+                "a": Const(value=10.0),
+                "b": Const(value=32.0),
+                "sum": Add(left=Ref(id="a"), right=Ref(id="b")),
+            },
+        )
+        result = Calculator(ast, None).run()
+
+        assert result == 42.0
+
+
+class TestInterpreterWithSharedNodes:
+    """Test Interpreter with DAG patterns (shared nodes)."""
+
+    def test_shared_node_evaluated_multiple_times(self) -> None:
+        """Test that shared nodes are evaluated each time (no built-in memoization)."""
+
+        class Counter(Node[int], tag="counter_interp_shared"):
+            value: int
+
+        class Add(Node[int], tag="add_interp_shared"):
+            left: Ref[Node[int]]
+            right: Ref[Node[int]]
+
+        class CountingEvaluator(Interpreter[None, int]):
+            def __init__(self, ast: AST, ctx: None) -> None:
+                super().__init__(ast, ctx)
+                self.eval_count = 0
+
+            def eval(self, node: Node[Any]) -> int:
+                self.eval_count += 1
+                match node:
+                    case Counter(value=v):
+                        return v
+                    case Add(left=l, right=r):
+                        return self.eval(self.resolve(l)) + self.eval(self.resolve(r))
+                    case _:
+                        raise NotImplementedError
+
+        # x is shared: result = x + x
+        ast = AST(
+            root="result",
+            nodes={
+                "x": Counter(value=5),
+                "result": Add(left=Ref(id="x"), right=Ref(id="x")),
+            },
+        )
+
+        evaluator = CountingEvaluator(ast, None)
+        result = evaluator.run()
+
+        assert result == 10
+        # x is evaluated twice (once for left, once for right), plus result itself
+        assert evaluator.eval_count == 3
+
+    def test_diamond_pattern_evaluation(self) -> None:
+        """Test evaluation of diamond pattern."""
+
+        class Const(Node[float], tag="const_interp_diamond"):
+            value: float
+
+        class Mul(Node[float], tag="mul_interp_diamond"):
+            left: Ref[Node[float]]
+            right: Ref[Node[float]]
+
+        class Add(Node[float], tag="add_interp_diamond"):
+            left: Ref[Node[float]]
+            right: Ref[Node[float]]
+
+        class Calculator(Interpreter[None, float]):
+            def eval(self, node: Node[Any]) -> float:
+                match node:
+                    case Const(value=v):
+                        return v
+                    case Mul(left=l, right=r):
+                        return self.eval(self.resolve(l)) * self.eval(self.resolve(r))
+                    case Add(left=l, right=r):
+                        return self.eval(self.resolve(l)) + self.eval(self.resolve(r))
+                    case _:
+                        raise NotImplementedError
+
+        # Expression: (x * y) + (x * y) where (x * y) is shared
+        ast = AST(
+            root="result",
+            nodes={
+                "x": Const(value=3.0),
+                "y": Const(value=4.0),
+                "product": Mul(left=Ref(id="x"), right=Ref(id="y")),
+                "result": Add(left=Ref(id="product"), right=Ref(id="product")),
+            },
+        )
+
+        result = Calculator(ast, None).run()
+        assert result == 24.0  # (3 * 4) + (3 * 4) = 12 + 12 = 24
+
+
+class TestInterpreterUserMemoization:
+    """Test that users can implement their own memoization."""
+
+    def test_user_implemented_memoization(self) -> None:
+        """Test user-implemented memoization pattern."""
+
+        class Const(Node[int], tag="const_interp_memo"):
+            value: int
+
+        class Add(Node[int], tag="add_interp_memo"):
+            left: Ref[Node[int]]
+            right: Ref[Node[int]]
+
+        class MemoizingCalculator(Interpreter[None, int]):
+            def __init__(self, ast: AST, ctx: None) -> None:
+                super().__init__(ast, ctx)
+                self._cache: dict[str, int] = {}
+                self.eval_count = 0
+
+            def eval_ref(self, ref: Ref[Node[int]]) -> int:
+                """Evaluate a ref with memoization."""
+                if ref.id not in self._cache:
+                    self._cache[ref.id] = self.eval(self.resolve(ref))
+                return self._cache[ref.id]
+
+            def eval(self, node: Node[Any]) -> int:
+                self.eval_count += 1
+                match node:
+                    case Const(value=v):
+                        return v
+                    case Add(left=l, right=r):
+                        return self.eval_ref(l) + self.eval_ref(r)
+                    case _:
+                        raise NotImplementedError
+
+        # x is shared: result = x + x
+        ast = AST(
+            root="result",
+            nodes={
+                "x": Const(value=5),
+                "result": Add(left=Ref(id="x"), right=Ref(id="x")),
+            },
+        )
+
+        evaluator = MemoizingCalculator(ast, None)
+        result = evaluator.run()
+
+        assert result == 10
+        # With memoization, x is only evaluated once
+        assert evaluator.eval_count == 2  # result + x (x cached for second use)
+
+
+class TestInterpreterComplexExamples:
+    """Test complete real-world-like interpreter examples."""
+
+    def test_arithmetic_expression_evaluator(self) -> None:
+        """Test complete arithmetic expression evaluator."""
+
+        class Const(Node[float], tag="const_interp_arith"):
+            value: float
+
+        class Var(Node[float], tag="var_interp_arith"):
+            name: str
+
+        class BinOp(Node[float], tag="binop_interp_arith"):
+            op: str
+            left: Ref[Node[float]]
+            right: Ref[Node[float]]
+
+        class ArithmeticEvaluator(Interpreter[dict[str, float], float]):
+            def eval(self, node: Node[Any]) -> float:
+                match node:
+                    case Const(value=v):
+                        return v
+                    case Var(name=n):
+                        return self.ctx[n]
+                    case BinOp(op="+", left=l, right=r):
+                        return self.eval(self.resolve(l)) + self.eval(self.resolve(r))
+                    case BinOp(op="-", left=l, right=r):
+                        return self.eval(self.resolve(l)) - self.eval(self.resolve(r))
+                    case BinOp(op="*", left=l, right=r):
+                        return self.eval(self.resolve(l)) * self.eval(self.resolve(r))
+                    case BinOp(op="/", left=l, right=r):
+                        return self.eval(self.resolve(l)) / self.eval(self.resolve(r))
+                    case _:
+                        raise NotImplementedError(f"Unknown node: {type(node)}")
+
+        # Expression: (x + 2) * (y - 1)
+        ast = AST(
+            root="result",
+            nodes={
+                "x": Var(name="x"),
+                "y": Var(name="y"),
+                "two": Const(value=2.0),
+                "one": Const(value=1.0),
+                "sum": BinOp(op="+", left=Ref(id="x"), right=Ref(id="two")),
+                "diff": BinOp(op="-", left=Ref(id="y"), right=Ref(id="one")),
+                "result": BinOp(op="*", left=Ref(id="sum"), right=Ref(id="diff")),
+            },
+        )
+
+        result = ArithmeticEvaluator(ast, {"x": 3.0, "y": 5.0}).run()
+        # (3 + 2) * (5 - 1) = 5 * 4 = 20
+        assert result == 20.0
+
+    def test_string_concatenation_interpreter(self) -> None:
+        """Test interpreter for string operations."""
+
+        class StrLiteral(Node[str], tag="strlit_interp"):
+            value: str
+
+        class Concat(Node[str], tag="concat_interp"):
+            left: Ref[Node[str]]
+            right: Ref[Node[str]]
+
+        class StringInterpreter(Interpreter[None, str]):
+            def eval(self, node: Node[Any]) -> str:
+                match node:
+                    case StrLiteral(value=v):
+                        return v
+                    case Concat(left=l, right=r):
+                        return self.eval(self.resolve(l)) + self.eval(self.resolve(r))
+                    case _:
+                        raise NotImplementedError
+
+        ast = AST(
+            root="result",
+            nodes={
+                "hello": StrLiteral(value="Hello"),
+                "space": StrLiteral(value=" "),
+                "world": StrLiteral(value="World"),
+                "hello_space": Concat(left=Ref(id="hello"), right=Ref(id="space")),
+                "result": Concat(left=Ref(id="hello_space"), right=Ref(id="world")),
+            },
+        )
+
+        result = StringInterpreter(ast, None).run()
+        assert result == "Hello World"
+
+    def test_interpreter_with_inline_and_ref_nodes(self) -> None:
+        """Test interpreter that handles both inline nodes and refs."""
+
+        class Const(Node[int], tag="const_interp_mixed"):
+            value: int
+
+        class Add(Node[int], tag="add_interp_mixed"):
+            left: Node[int] | Ref[Node[int]]
+            right: Node[int] | Ref[Node[int]]
+
+        class MixedEvaluator(Interpreter[None, int]):
+            def eval(self, node: Node[Any]) -> int:
+                match node:
+                    case Const(value=v):
+                        return v
+                    case Add(left=l, right=r):
+                        # Handle both inline nodes and refs
+                        left_val = (
+                            self.eval(self.resolve(l)) if isinstance(l, Ref) else self.eval(l)
+                        )
+                        right_val = (
+                            self.eval(self.resolve(r)) if isinstance(r, Ref) else self.eval(r)
+                        )
+                        return left_val + right_val
+                    case _:
+                        raise NotImplementedError
+
+        # Mix of inline and ref nodes
+        ast = AST(
+            root="result",
+            nodes={
+                "shared": Const(value=10),
+                # result has inline left and ref right
+                "result": Add(left=Const(value=5), right=Ref(id="shared")),
+            },
+        )
+
+        result = MixedEvaluator(ast, None).run()
+        assert result == 15

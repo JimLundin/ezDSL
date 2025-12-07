@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
@@ -78,3 +79,44 @@ class AST:
     @classmethod
     def from_json(cls, s: str) -> AST:
         return cls.from_dict(json.loads(s))
+
+
+class Interpreter[Ctx, R](ABC):
+    """Base class for AST interpreters.
+
+    Provides AST access, context, and reference resolution.
+    Subclass and implement `eval` with your preferred signature.
+
+    Ctx: Type of evaluation context (use None if no context needed)
+    R: Return type of run()
+    """
+
+    def __init__(self, ast: AST, ctx: Ctx) -> None:
+        """Initialize the interpreter.
+
+        Args:
+            ast: The AST to interpret
+            ctx: The evaluation context
+
+        """
+        self.ast = ast
+        self.ctx = ctx
+
+    def run(self) -> R:
+        """Evaluate the AST from its root node."""
+        root = self.ast.nodes[self.ast.root]
+        return self.eval(root)
+
+    def resolve[X](self, ref: Ref[X]) -> X:
+        """Resolve a reference to its target."""
+        return self.ast.resolve(ref)
+
+    @abstractmethod
+    def eval(self, node: Node[Any]) -> Any:
+        """Evaluate a node. Implement with pattern matching.
+
+        Override with your preferred signature:
+        - Homogeneous: def eval(self, node: Node[Any]) -> float
+        - Typed: def eval[T](self, node: Node[T]) -> T
+        """
+        ...

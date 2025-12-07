@@ -56,6 +56,7 @@ from nanodsl.adapters import (
 
 from nanodsl.ast import (
     AST,
+    Interpreter,
 )
 
 __all__ = [
@@ -65,6 +66,7 @@ __all__ = [
     "NodeRef",
     "Child",
     "AST",
+    "Interpreter",
     # Type definitions
     "TypeDef",
     "IntType",
