@@ -294,6 +294,26 @@ result = evaluate(expr, {"x": -5.0})
 print(result)  # 9.0 = abs(-5 + 2) * 3
 ```
 
+For more advanced patterns including the `Interpreter` base class, reference-based ASTs with `Ref`, and validation, see the [Examples](#examples) section below.
+
+## Examples
+
+The `examples/` directory contains comprehensive, runnable examples demonstrating how to build DSLs with nanoDSL:
+
+| Example | Description |
+|---------|-------------|
+| **[01_calculator.py](examples/01_calculator.py)** | Basic calculator DSL showing the `Interpreter` class, inline vs. reference-based ASTs, and memoization patterns |
+| **[02_configuration_dsl.py](examples/02_configuration_dsl.py)** | Configuration DSL with custom validation rules, error handling, and environment variable resolution |
+| **[03_workflow_dsl.py](examples/03_workflow_dsl.py)** | Workflow/pipeline DSL demonstrating DAG structures, diamond patterns, and node sharing |
+| **[04_adapting_existing_ast.py](examples/04_adapting_existing_ast.py)** | How to adapt existing ASTs (e.g., Python's `ast` module) to nanoDSL, including conversion and round-tripping |
+
+Each example is:
+- **Standalone and runnable** - Can be executed directly with Python 3.12+
+- **Fully documented** - Detailed docstrings explaining concepts
+- **Progressive** - Multiple sub-examples from simple to complex
+
+See [examples/README.md](examples/README.md) for detailed documentation and usage instructions.
+
 ## API Reference
 
 ### Core Classes
