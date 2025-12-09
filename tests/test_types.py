@@ -4,17 +4,23 @@ import pytest
 
 from typedsl.types import (
     BoolType,
+    DateTimeType,
+    DateType,
     DictType,
+    DurationType,
     ExternalType,
     FloatType,
     IntType,
     ListType,
     LiteralType,
+    MappingType,
     NodeType,
     NoneType,
     RefType,
+    SequenceType,
     SetType,
     StrType,
+    TimeType,
     TupleType,
     TypeDef,
     TypeParameter,
@@ -58,6 +64,36 @@ class TestPrimitiveTypes:
             it._tag = "other"
 
 
+class TestTemporalTypes:
+    """Test temporal types."""
+
+    def test_date_type_creation(self) -> None:
+        """Test creating a DateType."""
+        dt = DateType()
+        assert dt._tag == "date"
+
+    def test_time_type_creation(self) -> None:
+        """Test creating a TimeType."""
+        tt = TimeType()
+        assert tt._tag == "time"
+
+    def test_datetime_type_creation(self) -> None:
+        """Test creating a DateTimeType."""
+        dtt = DateTimeType()
+        assert dtt._tag == "datetime"
+
+    def test_duration_type_creation(self) -> None:
+        """Test creating a DurationType."""
+        durt = DurationType()
+        assert durt._tag == "duration"
+
+    def test_temporal_types_frozen(self) -> None:
+        """Test that temporal types are immutable."""
+        dt = DateType()
+        with pytest.raises((AttributeError, TypeError)):
+            dt._tag = "other"
+
+
 class TestContainerTypes:
     """Test concrete container types."""
 
@@ -85,6 +121,50 @@ class TestContainerTypes:
         dt = DictType(key=StrType(), value=IntType())
         with pytest.raises((AttributeError, TypeError)):
             dt.key = IntType()
+
+
+class TestGenericContainerTypes:
+    """Test generic container types (Sequence, Mapping)."""
+
+    def test_sequence_type_creation(self) -> None:
+        """Test creating a SequenceType."""
+        st = SequenceType(element=IntType())
+        assert st._tag == "sequence"
+        assert isinstance(st.element, IntType)
+
+    def test_sequence_type_with_nested_type(self) -> None:
+        """Test creating SequenceType with nested type."""
+        st = SequenceType(element=ListType(element=StrType()))
+        assert st._tag == "sequence"
+        assert isinstance(st.element, ListType)
+        assert isinstance(st.element.element, StrType)
+
+    def test_sequence_type_frozen(self) -> None:
+        """Test that SequenceType is immutable."""
+        st = SequenceType(element=IntType())
+        with pytest.raises((AttributeError, TypeError)):
+            st.element = StrType()
+
+    def test_mapping_type_creation(self) -> None:
+        """Test creating a MappingType."""
+        mt = MappingType(key=StrType(), value=IntType())
+        assert mt._tag == "mapping"
+        assert isinstance(mt.key, StrType)
+        assert isinstance(mt.value, IntType)
+
+    def test_mapping_type_with_nested_types(self) -> None:
+        """Test creating MappingType with nested types."""
+        mt = MappingType(key=StrType(), value=ListType(element=FloatType()))
+        assert mt._tag == "mapping"
+        assert isinstance(mt.key, StrType)
+        assert isinstance(mt.value, ListType)
+        assert isinstance(mt.value.element, FloatType)
+
+    def test_mapping_type_frozen(self) -> None:
+        """Test that MappingType is immutable."""
+        mt = MappingType(key=StrType(), value=IntType())
+        with pytest.raises((AttributeError, TypeError)):
+            mt.key = IntType()
 
 
 class TestNodeType:
@@ -171,10 +251,19 @@ class TestTypeDefRegistry:
         assert "str" in TypeDef.registry
         assert "bool" in TypeDef.registry
         assert "none" in TypeDef.registry
+        # Temporal types
+        assert "date" in TypeDef.registry
+        assert "time" in TypeDef.registry
+        assert "datetime" in TypeDef.registry
+        assert "duration" in TypeDef.registry
+        # Container types
         assert "list" in TypeDef.registry
         assert "dict" in TypeDef.registry
         assert "set" in TypeDef.registry
         assert "tuple" in TypeDef.registry
+        # Generic container types
+        assert "sequence" in TypeDef.registry
+        assert "mapping" in TypeDef.registry
         assert "literal" in TypeDef.registry
         assert "node" in TypeDef.registry
         assert "ref" in TypeDef.registry
@@ -189,10 +278,19 @@ class TestTypeDefRegistry:
         assert TypeDef.registry["str"] == StrType
         assert TypeDef.registry["bool"] == BoolType
         assert TypeDef.registry["none"] == NoneType
+        # Temporal types
+        assert TypeDef.registry["date"] == DateType
+        assert TypeDef.registry["time"] == TimeType
+        assert TypeDef.registry["datetime"] == DateTimeType
+        assert TypeDef.registry["duration"] == DurationType
+        # Container types
         assert TypeDef.registry["list"] == ListType
         assert TypeDef.registry["dict"] == DictType
         assert TypeDef.registry["set"] == SetType
         assert TypeDef.registry["tuple"] == TupleType
+        # Generic container types
+        assert TypeDef.registry["sequence"] == SequenceType
+        assert TypeDef.registry["mapping"] == MappingType
         assert TypeDef.registry["literal"] == LiteralType
         assert TypeDef.registry["node"] == NodeType
         assert TypeDef.registry["ref"] == RefType

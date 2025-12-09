@@ -1,5 +1,7 @@
 """Tests for typedsl.schema module."""
 
+import datetime
+from collections.abc import Mapping, Sequence
 from typing import TypeVar
 
 import pytest
@@ -7,12 +9,18 @@ import pytest
 from typedsl.schema import extract_type
 from typedsl.types import (
     BoolType,
+    DateTimeType,
+    DateType,
     DictType,
+    DurationType,
     FloatType,
     IntType,
     ListType,
+    MappingType,
     NoneType,
+    SequenceType,
     StrType,
+    TimeType,
     TypeParameter,
     UnionType,
 )
@@ -45,6 +53,30 @@ class TestExtractPrimitives:
         """Test extracting None type."""
         result = extract_type(type(None))
         assert isinstance(result, NoneType)
+
+
+class TestExtractTemporalTypes:
+    """Test extracting temporal types."""
+
+    def test_extract_date(self) -> None:
+        """Test extracting datetime.date type."""
+        result = extract_type(datetime.date)
+        assert isinstance(result, DateType)
+
+    def test_extract_time(self) -> None:
+        """Test extracting datetime.time type."""
+        result = extract_type(datetime.time)
+        assert isinstance(result, TimeType)
+
+    def test_extract_datetime(self) -> None:
+        """Test extracting datetime.datetime type."""
+        result = extract_type(datetime.datetime)
+        assert isinstance(result, DateTimeType)
+
+    def test_extract_timedelta(self) -> None:
+        """Test extracting datetime.timedelta type."""
+        result = extract_type(datetime.timedelta)
+        assert isinstance(result, DurationType)
 
 
 class TestExtractTypeParameter:
@@ -129,6 +161,78 @@ class TestExtractContainers:
         assert isinstance(result.element, DictType)
         assert isinstance(result.element.key, StrType)
         assert isinstance(result.element.value, IntType)
+
+
+class TestExtractGenericContainers:
+    """Test extracting generic container types (Sequence, Mapping)."""
+
+    def test_extract_sequence_int(self) -> None:
+        """Test extracting Sequence[int]."""
+        result = extract_type(Sequence[int])
+        assert isinstance(result, SequenceType)
+        assert isinstance(result.element, IntType)
+
+    def test_extract_sequence_str(self) -> None:
+        """Test extracting Sequence[str]."""
+        result = extract_type(Sequence[str])
+        assert isinstance(result, SequenceType)
+        assert isinstance(result.element, StrType)
+
+    def test_extract_mapping_str_int(self) -> None:
+        """Test extracting Mapping[str, int]."""
+        result = extract_type(Mapping[str, int])
+        assert isinstance(result, MappingType)
+        assert isinstance(result.key, StrType)
+        assert isinstance(result.value, IntType)
+
+    def test_extract_mapping_int_float(self) -> None:
+        """Test extracting Mapping[int, float]."""
+        result = extract_type(Mapping[int, float])
+        assert isinstance(result, MappingType)
+        assert isinstance(result.key, IntType)
+        assert isinstance(result.value, FloatType)
+
+    def test_extract_nested_sequence(self) -> None:
+        """Test extracting Sequence[Sequence[int]]."""
+        result = extract_type(Sequence[Sequence[int]])
+        assert isinstance(result, SequenceType)
+        assert isinstance(result.element, SequenceType)
+        assert isinstance(result.element.element, IntType)
+
+    def test_extract_sequence_of_mapping(self) -> None:
+        """Test extracting Sequence[Mapping[str, int]]."""
+        result = extract_type(Sequence[Mapping[str, int]])
+        assert isinstance(result, SequenceType)
+        assert isinstance(result.element, MappingType)
+        assert isinstance(result.element.key, StrType)
+        assert isinstance(result.element.value, IntType)
+
+    def test_extract_mapping_with_sequence_value(self) -> None:
+        """Test extracting Mapping[str, Sequence[int]]."""
+        result = extract_type(Mapping[str, Sequence[int]])
+        assert isinstance(result, MappingType)
+        assert isinstance(result.key, StrType)
+        assert isinstance(result.value, SequenceType)
+        assert isinstance(result.value.element, IntType)
+
+    def test_extract_sequence_with_type_parameter(self) -> None:
+        """Test extracting Sequence[T] where T is a type parameter."""
+        T = TypeVar("T")
+        result = extract_type(Sequence[T])
+        assert isinstance(result, SequenceType)
+        assert isinstance(result.element, TypeParameter)
+        assert result.element.name == "T"
+
+    def test_extract_mapping_with_type_parameters(self) -> None:
+        """Test extracting Mapping[K, V] where K, V are type parameters."""
+        K = TypeVar("K")
+        V = TypeVar("V")
+        result = extract_type(Mapping[K, V])
+        assert isinstance(result, MappingType)
+        assert isinstance(result.key, TypeParameter)
+        assert result.key.name == "K"
+        assert isinstance(result.value, TypeParameter)
+        assert result.value.name == "V"
 
 
 class TestExtractWithTypeParameters:

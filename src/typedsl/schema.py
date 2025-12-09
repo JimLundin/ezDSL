@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import datetime
 import types
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, fields
 from typing import (
     Any,
@@ -18,16 +20,22 @@ from typing import (
 from typedsl.nodes import Node, Ref
 from typedsl.types import (
     BoolType,
+    DateTimeType,
+    DateType,
     DictType,
+    DurationType,
     FloatType,
     IntType,
     ListType,
     LiteralType,
+    MappingType,
     NodeType,
     NoneType,
     RefType,
+    SequenceType,
     SetType,
     StrType,
+    TimeType,
     TupleType,
     TypeDef,
     TypeParameter,
@@ -94,6 +102,16 @@ def extract_type(py_type: Any) -> TypeDef:
     if py_type is type(None):
         return NoneType()
 
+    # Temporal types
+    if py_type is datetime.date:
+        return DateType()
+    if py_type is datetime.time:
+        return TimeType()
+    if py_type is datetime.datetime:
+        return DateTimeType()
+    if py_type is datetime.timedelta:
+        return DurationType()
+
     if origin is list:
         if not args:
             msg = "list type must have an element type"
@@ -117,6 +135,19 @@ def extract_type(py_type: Any) -> TypeDef:
             msg = "tuple type must have element types"
             raise ValueError(msg)
         return TupleType(elements=tuple(extract_type(arg) for arg in args))
+
+    # Generic container types from collections.abc
+    if origin is Sequence:
+        if not args:
+            msg = "Sequence type must have an element type"
+            raise ValueError(msg)
+        return SequenceType(element=extract_type(args[0]))
+
+    if origin is Mapping:
+        if len(args) != 2:
+            msg = "Mapping type must have key and value types"
+            raise ValueError(msg)
+        return MappingType(key=extract_type(args[0]), value=extract_type(args[1]))
 
     if origin is Literal:
         if not args:
