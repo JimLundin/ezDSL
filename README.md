@@ -294,7 +294,36 @@ result = evaluate(expr, {"x": -5.0})
 print(result)  # 9.0 = abs(-5 + 2) * 3
 ```
 
-For more advanced patterns including the `Interpreter` base class and reference-based ASTs with `Ref`, see the [Examples](#examples) section below.
+For more advanced patterns including the `Interpreter` base class and reference-based ASTs with `Ref`, see the [Tutorials](#tutorials) section below.
+
+## Tutorials
+
+The `tutorial/` directory contains comprehensive, step-by-step guides:
+
+### Feature-by-Feature Tutorial
+
+**[TUTORIAL.md](tutorial/TUTORIAL.md)** (~30 min) - Learn typeDSL progressively:
+- Your first node
+- Composing nodes
+- **Generic nodes with type parameters**
+- Interpreters and pattern matching
+- References and shared nodes
+- Serialization
+
+### Problem-Based Tutorials
+
+**[EXPRESSION_LANGUAGE.md](tutorial/EXPRESSION_LANGUAGE.md)** (~40 min) - Build a complete typed expression language:
+- Generic binary operations
+- Function definitions and closures
+- Type checking interpreter
+- Demonstrates type variance and polymorphism
+
+**[SQL_QUERY_BUILDER.md](tutorial/SQL_QUERY_BUILDER.md)** (~45 min) - Build a type-safe SQL query builder:
+- Type-safe comparisons with generics
+- Schema validation
+- SQL generation
+- Prevents SQL injection
+- Real-world concrete example
 
 ## Examples
 
