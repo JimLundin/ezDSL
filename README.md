@@ -294,25 +294,18 @@ result = evaluate(expr, {"x": -5.0})
 print(result)  # 9.0 = abs(-5 + 2) * 3
 ```
 
-For more advanced patterns including the `Interpreter` base class, reference-based ASTs with `Ref`, and validation, see the [Examples](#examples) section below.
+For more advanced patterns including the `Interpreter` base class and reference-based ASTs with `Ref`, see the [Examples](#examples) section below.
 
 ## Examples
 
-The `examples/` directory contains comprehensive, runnable examples demonstrating how to build DSLs with nanoDSL:
+The `examples/` directory contains focused, educational examples:
 
-| Example | Description |
-|---------|-------------|
-| **[01_calculator.py](examples/01_calculator.py)** | Basic calculator DSL showing the `Interpreter` class, inline vs. reference-based ASTs, and memoization patterns |
-| **[02_configuration_dsl.py](examples/02_configuration_dsl.py)** | Configuration DSL with custom validation rules, error handling, and environment variable resolution |
-| **[03_workflow_dsl.py](examples/03_workflow_dsl.py)** | Workflow/pipeline DSL demonstrating DAG structures, diamond patterns, and node sharing |
-| **[04_adapting_existing_ast.py](examples/04_adapting_existing_ast.py)** | How to adapt existing ASTs (e.g., Python's `ast` module) to nanoDSL, including conversion and round-tripping |
+| Example | Description | Lines |
+|---------|-------------|-------|
+| **[01_calculator.py](examples/01_calculator.py)** | Basic calculator DSL - node definition, `Interpreter` class, shared subexpressions | ~130 |
+| **[02_adapting_existing_ast.py](examples/02_adapting_existing_ast.py)** | Converting external ASTs (Python's `ast` module) to nanoDSL | ~160 |
 
-Each example is:
-- **Standalone and runnable** - Can be executed directly with Python 3.12+
-- **Fully documented** - Detailed docstrings explaining concepts
-- **Progressive** - Multiple sub-examples from simple to complex
-
-See [examples/README.md](examples/README.md) for detailed documentation and usage instructions.
+See [examples/README.md](examples/README.md) for usage instructions and key patterns.
 
 ## API Reference
 
