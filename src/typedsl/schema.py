@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 import types
 from collections.abc import Mapping, Sequence, Set as AbstractSet
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields as dataclass_fields
 from decimal import Decimal
 from typing import (
     Any,
@@ -48,38 +48,35 @@ from typedsl.types import (
     _substitute_type_params,
 )
 
-# Unified type map: Python type/origin -> (TypeDef class, expected arg count)
-# 0 args = simple type, 1 arg = element container, 2 args = key-value container
-_TYPE_MAP: dict[type, tuple[type[TypeDef], int]] = {
-    # Simple types (0 args)
-    int: (IntType, 0),
-    float: (FloatType, 0),
-    str: (StrType, 0),
-    bool: (BoolType, 0),
-    type(None): (NoneType, 0),
-    bytes: (BytesType, 0),
-    Decimal: (DecimalType, 0),
-    datetime.date: (DateType, 0),
-    datetime.time: (TimeType, 0),
-    datetime.datetime: (DateTimeType, 0),
-    datetime.timedelta: (DurationType, 0),
-    # Element containers (1 arg)
-    list: (ListType, 1),
-    set: (SetType, 1),
-    frozenset: (FrozenSetType, 1),
-    Sequence: (SequenceType, 1),
-    AbstractSet: (AbstractSetType, 1),
-    # Key-value containers (2 args)
-    dict: (DictType, 2),
-    Mapping: (MappingType, 2),
+# Unified type map: Python type/origin -> TypeDef class
+_TYPE_MAP: dict[type, type[TypeDef]] = {
+    # Simple types
+    int: IntType,
+    float: FloatType,
+    str: StrType,
+    bool: BoolType,
+    type(None): NoneType,
+    bytes: BytesType,
+    Decimal: DecimalType,
+    datetime.date: DateType,
+    datetime.time: TimeType,
+    datetime.datetime: DateTimeType,
+    datetime.timedelta: DurationType,
+    # Element containers
+    list: ListType,
+    set: SetType,
+    frozenset: FrozenSetType,
+    Sequence: SequenceType,
+    AbstractSet: AbstractSetType,
+    # Key-value containers
+    dict: DictType,
+    Mapping: MappingType,
 }
 
 
-def _get_type_name(origin: type) -> str:
-    """Get a readable name for a type origin."""
-    if origin is AbstractSet:
-        return "Set"
-    return getattr(origin, "__name__", str(origin))
+def _get_typedef_fields(typedef_cls: type[TypeDef]) -> list[str]:
+    """Get public field names from a TypeDef class."""
+    return [f.name for f in dataclass_fields(typedef_cls) if not f.name.startswith("_")]
 
 
 @dataclass(frozen=True)
@@ -134,19 +131,15 @@ def extract_type(py_type: Any) -> TypeDef:
     # Check unified type map (simple types use py_type, containers use origin)
     lookup_key = py_type if py_type in _TYPE_MAP else origin
     if lookup_key in _TYPE_MAP:
-        typedef_cls, arg_count = _TYPE_MAP[lookup_key]
-        if arg_count == 0:
-            return typedef_cls()
-        type_name = _get_type_name(lookup_key)
-        if len(args) != arg_count:
-            if arg_count == 1:
-                msg = f"{type_name} type must have an element type"
-            else:
-                msg = f"{type_name} type must have key and value types"
+        typedef_cls = _TYPE_MAP[lookup_key]
+        field_names = _get_typedef_fields(typedef_cls)
+        if len(args) != len(field_names):
+            type_name = getattr(lookup_key, "__name__", str(lookup_key))
+            msg = f"{type_name} requires {len(field_names)} type argument(s), got {len(args)}"
             raise ValueError(msg)
-        if arg_count == 1:
-            return typedef_cls(element=extract_type(args[0]))
-        return typedef_cls(key=extract_type(args[0]), value=extract_type(args[1]))
+        return typedef_cls(**{
+            name: extract_type(arg) for name, arg in zip(field_names, args, strict=True)
+        })
 
     # Tuple (heterogeneous, variable-length elements)
     if origin is tuple:
@@ -212,7 +205,7 @@ def node_schema(cls: type[Node[Any]]) -> NodeSchema:
 
     node_fields = (
         FieldSchema(name=f.name, type=extract_type(hints[f.name]))
-        for f in fields(cls)
+        for f in dataclass_fields(cls)
         if not f.name.startswith("_")
     )
 
