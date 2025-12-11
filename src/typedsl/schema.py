@@ -48,6 +48,36 @@ from typedsl.types import (
     _substitute_type_params,
 )
 
+# Mapping from Python types to their TypeDef classes (no type arguments)
+_SIMPLE_TYPE_MAP: dict[type, type[TypeDef]] = {
+    int: IntType,
+    float: FloatType,
+    str: StrType,
+    bool: BoolType,
+    type(None): NoneType,
+    bytes: BytesType,
+    Decimal: DecimalType,
+    datetime.date: DateType,
+    datetime.time: TimeType,
+    datetime.datetime: DateTimeType,
+    datetime.timedelta: DurationType,
+}
+
+# Mapping from container origins to (TypeDef class, type name) for single-element containers
+_ELEMENT_CONTAINER_MAP: dict[type, tuple[type[TypeDef], str]] = {
+    list: (ListType, "list"),
+    set: (SetType, "set"),
+    frozenset: (FrozenSetType, "frozenset"),
+    Sequence: (SequenceType, "Sequence"),
+    AbstractSet: (AbstractSetType, "Set"),
+}
+
+# Mapping from container origins to (TypeDef class, type name) for key-value containers
+_KEY_VALUE_CONTAINER_MAP: dict[type, tuple[type[TypeDef], str]] = {
+    dict: (DictType, "dict"),
+    Mapping: (MappingType, "Mapping"),
+}
+
 
 @dataclass(frozen=True)
 class FieldSchema:
@@ -72,6 +102,7 @@ def extract_type(py_type: Any) -> TypeDef:
     origin = get_origin(py_type)
     args = get_args(py_type)
 
+    # Handle TypeVar
     if isinstance(py_type, TypeVar):
         bound = py_type.__bound__
         return TypeParameter(
@@ -79,6 +110,7 @@ def extract_type(py_type: Any) -> TypeDef:
             bound=extract_type(bound) if bound is not None else None,
         )
 
+    # Handle registered external types
     custom_typedef = TypeDef.get_registered_type(py_type)
     if custom_typedef is not None:
         return custom_typedef
@@ -96,80 +128,34 @@ def extract_type(py_type: Any) -> TypeDef:
         substituted = _substitute_type_params(origin.__value__, substitutions)
         return extract_type(substituted)
 
-    if py_type is int:
-        return IntType()
-    if py_type is float:
-        return FloatType()
-    if py_type is str:
-        return StrType()
-    if py_type is bool:
-        return BoolType()
-    if py_type is type(None):
-        return NoneType()
-    if py_type is bytes:
-        return BytesType()
-    if py_type is Decimal:
-        return DecimalType()
+    # Simple types (no type arguments)
+    if py_type in _SIMPLE_TYPE_MAP:
+        return _SIMPLE_TYPE_MAP[py_type]()
 
-    # Temporal types
-    if py_type is datetime.date:
-        return DateType()
-    if py_type is datetime.time:
-        return TimeType()
-    if py_type is datetime.datetime:
-        return DateTimeType()
-    if py_type is datetime.timedelta:
-        return DurationType()
-
-    if origin is list:
+    # Single-element container types
+    if origin in _ELEMENT_CONTAINER_MAP:
+        typedef_cls, type_name = _ELEMENT_CONTAINER_MAP[origin]
         if not args:
-            msg = "list type must have an element type"
+            msg = f"{type_name} type must have an element type"
             raise ValueError(msg)
-        return ListType(element=extract_type(args[0]))
+        return typedef_cls(element=extract_type(args[0]))
 
-    if origin is dict:
+    # Key-value container types
+    if origin in _KEY_VALUE_CONTAINER_MAP:
+        typedef_cls, type_name = _KEY_VALUE_CONTAINER_MAP[origin]
         if len(args) != 2:
-            msg = "dict type must have key and value types"
+            msg = f"{type_name} type must have key and value types"
             raise ValueError(msg)
-        return DictType(key=extract_type(args[0]), value=extract_type(args[1]))
+        return typedef_cls(key=extract_type(args[0]), value=extract_type(args[1]))
 
-    if origin is set:
-        if not args:
-            msg = "set type must have an element type"
-            raise ValueError(msg)
-        return SetType(element=extract_type(args[0]))
-
-    if origin is frozenset:
-        if not args:
-            msg = "frozenset type must have an element type"
-            raise ValueError(msg)
-        return FrozenSetType(element=extract_type(args[0]))
-
+    # Tuple (heterogeneous, variable-length elements)
     if origin is tuple:
         if not args:
             msg = "tuple type must have element types"
             raise ValueError(msg)
         return TupleType(elements=tuple(extract_type(arg) for arg in args))
 
-    # Generic container types from collections.abc
-    if origin is Sequence:
-        if not args:
-            msg = "Sequence type must have an element type"
-            raise ValueError(msg)
-        return SequenceType(element=extract_type(args[0]))
-
-    if origin is Mapping:
-        if len(args) != 2:
-            msg = "Mapping type must have key and value types"
-            raise ValueError(msg)
-        return MappingType(key=extract_type(args[0]), value=extract_type(args[1]))
-
-    if origin is AbstractSet:
-        if not args:
-            msg = "Set type must have an element type"
-            raise ValueError(msg)
-        return AbstractSetType(element=extract_type(args[0]))
-
+    # Literal values
     if origin is Literal:
         if not args:
             msg = "Literal type must have values"
@@ -180,15 +166,17 @@ def extract_type(py_type: Any) -> TypeDef:
                 raise TypeError(msg)
         return LiteralType(values=args)
 
+    # Node types
     if origin is not None and isinstance(origin, type) and issubclass(origin, Node):
         return NodeType(extract_type(args[0]) if args else NoneType())
-
     if isinstance(py_type, type) and issubclass(py_type, Node):
         return NodeType(_extract_node_returns(py_type))
 
+    # Ref type
     if origin is Ref:
         return RefType(extract_type(args[0]) if args else NoneType())
 
+    # Union types
     if isinstance(py_type, types.UnionType) or origin is Union:
         return UnionType(tuple(extract_type(a) for a in args))
 
