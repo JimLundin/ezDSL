@@ -116,6 +116,7 @@ class TestASTWithReferencesWorkflow:
         x_node = ast.nodes["x"]
         result_node = ast.nodes["result"]
 
+        assert isinstance(result_node, Compute)
         resolved_left = ast.resolve(result_node.left)
         resolved_right = ast.resolve(result_node.right)
 
@@ -179,7 +180,11 @@ class TestASTWithReferencesWorkflow:
         # Verify relationships preserved
         final_node = restored.nodes["final"]
         j2_node = restored.nodes["j2"]
+
+        assert isinstance(final_node, Transform)
         assert final_node.input.id == "j2"
+
+        assert isinstance(j2_node, Join)
         assert j2_node.left.id == "j1"
 
 
@@ -208,7 +213,11 @@ class TestGenericNodeWorkflow:
         # Verify
         assert restored_int == int_container
         assert restored_str == str_container
+
+        assert isinstance(restored_int, Container)
         assert restored_int.items == [1, 2, 3]
+
+        assert isinstance(restored_str, Container)
         assert restored_str.items == ["a", "b", "c"]
 
     def test_generic_node_schema_extraction(self) -> None:
