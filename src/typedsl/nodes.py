@@ -25,15 +25,8 @@ class Node[T]:
     def __init_subclass__(cls, **kwargs: Any) -> None:
         dataclass(frozen=True)(cls)
 
-        # Store signature kwargs (preserves insertion order)
         cls._signature = kwargs
-
-        # Compose tag from signature parts (fixed "." delimiter)
-        if kwargs:
-            parts = [str(v) for v in kwargs.values()]
-            cls._tag = ".".join(parts)
-        else:
-            cls._tag = cls.__name__.lower().removesuffix("node")
+        cls._tag = ".".join(str(v) for v in kwargs.values()) if kwargs else cls.__name__
 
         if existing := Node.registry.get(cls._tag):
             if existing is not cls:

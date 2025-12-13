@@ -47,7 +47,7 @@ class TestNodeWithSignature:
         class ComputerNode(Node[int]):
             value: int
 
-        assert ComputerNode._tag == "computer"
+        assert ComputerNode._tag == "ComputerNode"
         assert ComputerNode._signature == {}
 
     def test_node_signature_with_numbers(self) -> None:
@@ -105,7 +105,7 @@ class TestNodeSchemaWithSignature:
             value: int
 
         schema = node_schema(AutoNode)
-        assert schema.tag == "auto"
+        assert schema.tag == "AutoNode"
         assert schema.signature == {}
 
 

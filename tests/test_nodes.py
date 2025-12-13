@@ -50,16 +50,16 @@ class TestNodeTags:
         class MyTestNode(Node[int]):
             value: int
 
-        # 'node' suffix is removed, so MyTestNode -> mytest
-        assert MyTestNode._tag == "mytest"
+        # Tag is the class name as-is
+        assert MyTestNode._tag == "MyTestNode"
 
-    def test_automatic_tag_strips_node_suffix(self) -> None:
-        """Test that 'node' suffix is removed from auto-generated tags."""
+    def test_automatic_tag_uses_class_name(self) -> None:
+        """Test that auto-generated tags use the exact class name."""
 
         class CalculatorNode(Node[float]):
             result: float
 
-        assert CalculatorNode._tag == "calculator"
+        assert CalculatorNode._tag == "CalculatorNode"
 
     def test_custom_tag(self) -> None:
         """Test explicitly setting a custom tag."""
