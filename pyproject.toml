@@ -3,11 +3,41 @@ name = "typeDSL"
 version = "0.1.0"
 description = "A type-safe node system for building ASTs and DSLs in Python 3.12+"
 readme = "README.md"
+license = { text = "Apache-2.0 OR MIT" }
 authors = [
     { name = "Jim Lundin", email = "JimLundin@users.noreply.github.com" },
 ]
 requires-python = ">=3.12"
 dependencies = []
+keywords = [
+    "ast",
+    "dsl",
+    "nodes",
+    "type-safe",
+    "serialization",
+    "schema",
+    "parser",
+    "compiler",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Compilers",
+    "Topic :: Software Development :: Code Generators",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/JimLundin/typeDSL"
+Repository = "https://github.com/JimLundin/typeDSL"
+Issues = "https://github.com/JimLundin/typeDSL/issues"
+Documentation = "https://github.com/JimLundin/typeDSL#readme"
 
 [build-system]
 requires = ["uv_build>=0.8.17,<0.9.0"]
