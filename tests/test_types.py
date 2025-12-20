@@ -38,33 +38,33 @@ class TestPrimitiveTypes:
     def test_int_type_creation(self) -> None:
         """Test creating an IntType."""
         it = IntType()
-        assert it._tag == "int"
+        assert it.tag == "int"
 
     def test_float_type_creation(self) -> None:
         """Test creating a FloatType."""
         ft = FloatType()
-        assert ft._tag == "float"
+        assert ft.tag == "float"
 
     def test_str_type_creation(self) -> None:
         """Test creating a StrType."""
         st = StrType()
-        assert st._tag == "str"
+        assert st.tag == "str"
 
     def test_bool_type_creation(self) -> None:
         """Test creating a BoolType."""
         bt = BoolType()
-        assert bt._tag == "bool"
+        assert bt.tag == "bool"
 
     def test_none_type_creation(self) -> None:
         """Test creating a NoneType."""
         nt = NoneType()
-        assert nt._tag == "none"
+        assert nt.tag == "none"
 
     def test_primitive_types_frozen(self) -> None:
         """Test that primitive types are immutable."""
         it = IntType()
         with pytest.raises((AttributeError, TypeError)):
-            it._tag = "other"
+            it.tag = "other"
 
 
 class TestBinaryAndPrecisionTypes:
@@ -73,18 +73,18 @@ class TestBinaryAndPrecisionTypes:
     def test_bytes_type_creation(self) -> None:
         """Test creating a BytesType."""
         bt = BytesType()
-        assert bt._tag == "bytes"
+        assert bt.tag == "bytes"
 
     def test_decimal_type_creation(self) -> None:
         """Test creating a DecimalType."""
         dt = DecimalType()
-        assert dt._tag == "decimal"
+        assert dt.tag == "decimal"
 
     def test_bytes_type_frozen(self) -> None:
         """Test that BytesType is immutable."""
         bt = BytesType()
         with pytest.raises((AttributeError, TypeError)):
-            bt._tag = "other"
+            bt.tag = "other"
 
 
 class TestTemporalTypes:
@@ -93,28 +93,28 @@ class TestTemporalTypes:
     def test_date_type_creation(self) -> None:
         """Test creating a DateType."""
         dt = DateType()
-        assert dt._tag == "date"
+        assert dt.tag == "date"
 
     def test_time_type_creation(self) -> None:
         """Test creating a TimeType."""
         tt = TimeType()
-        assert tt._tag == "time"
+        assert tt.tag == "time"
 
     def test_datetime_type_creation(self) -> None:
         """Test creating a DateTimeType."""
         dtt = DateTimeType()
-        assert dtt._tag == "datetime"
+        assert dtt.tag == "datetime"
 
     def test_duration_type_creation(self) -> None:
         """Test creating a DurationType."""
         durt = DurationType()
-        assert durt._tag == "duration"
+        assert durt.tag == "duration"
 
     def test_temporal_types_frozen(self) -> None:
         """Test that temporal types are immutable."""
         dt = DateType()
         with pytest.raises((AttributeError, TypeError)):
-            dt._tag = "other"
+            dt.tag = "other"
 
 
 class TestContainerTypes:
@@ -123,7 +123,7 @@ class TestContainerTypes:
     def test_list_type_creation(self) -> None:
         """Test creating a ListType."""
         lt = ListType(element=IntType())
-        assert lt._tag == "list"
+        assert lt.tag == "list"
         assert isinstance(lt.element, IntType)
 
     def test_list_type_frozen(self) -> None:
@@ -135,7 +135,7 @@ class TestContainerTypes:
     def test_dict_type_creation(self) -> None:
         """Test creating a DictType."""
         dt = DictType(key=StrType(), value=IntType())
-        assert dt._tag == "dict"
+        assert dt.tag == "dict"
         assert isinstance(dt.key, StrType)
         assert isinstance(dt.value, IntType)
 
@@ -152,13 +152,13 @@ class TestGenericContainerTypes:
     def test_sequence_type_creation(self) -> None:
         """Test creating a SequenceType."""
         st = SequenceType(element=IntType())
-        assert st._tag == "sequence"
+        assert st.tag == "sequence"
         assert isinstance(st.element, IntType)
 
     def test_sequence_type_with_nested_type(self) -> None:
         """Test creating SequenceType with nested type."""
         st = SequenceType(element=ListType(element=StrType()))
-        assert st._tag == "sequence"
+        assert st.tag == "sequence"
         assert isinstance(st.element, ListType)
         assert isinstance(st.element.element, StrType)
 
@@ -171,14 +171,14 @@ class TestGenericContainerTypes:
     def test_mapping_type_creation(self) -> None:
         """Test creating a MappingType."""
         mt = MappingType(key=StrType(), value=IntType())
-        assert mt._tag == "mapping"
+        assert mt.tag == "mapping"
         assert isinstance(mt.key, StrType)
         assert isinstance(mt.value, IntType)
 
     def test_mapping_type_with_nested_types(self) -> None:
         """Test creating MappingType with nested types."""
         mt = MappingType(key=StrType(), value=ListType(element=FloatType()))
-        assert mt._tag == "mapping"
+        assert mt.tag == "mapping"
         assert isinstance(mt.key, StrType)
         assert isinstance(mt.value, ListType)
         assert isinstance(mt.value.element, FloatType)
@@ -192,7 +192,7 @@ class TestGenericContainerTypes:
     def test_frozenset_type_creation(self) -> None:
         """Test creating a FrozenSetType."""
         fst = FrozenSetType(element=IntType())
-        assert fst._tag == "frozenset"
+        assert fst.tag == "frozenset"
         assert isinstance(fst.element, IntType)
 
     def test_frozenset_type_frozen(self) -> None:
@@ -208,8 +208,8 @@ class TestNodeType:
     def test_node_type_creation(self) -> None:
         """Test creating a NodeType."""
         nt = NodeType(returns=FloatType())
-        assert nt.returns._tag == "float"
-        assert nt._tag == "node"
+        assert nt.returns.tag == "float"
+        assert nt.tag == "node"
 
     def test_node_type_frozen(self) -> None:
         """Test that NodeType is immutable."""
@@ -225,7 +225,7 @@ class TestRefType:
         """Test creating a RefType."""
         rt = RefType(target=IntType())
         assert isinstance(rt.target, IntType)
-        assert rt._tag == "ref"
+        assert rt.tag == "ref"
 
     def test_ref_type_frozen(self) -> None:
         """Test that RefType is immutable."""
@@ -243,7 +243,7 @@ class TestUnionType:
         assert len(ut.options) == 2
         assert isinstance(ut.options[0], IntType)
         assert isinstance(ut.options[1], StrType)
-        assert ut._tag == "union"
+        assert ut.tag == "union"
 
     def test_union_type_frozen(self) -> None:
         """Test that UnionType is immutable."""
@@ -260,7 +260,7 @@ class TestTypeParameter:
         tp = TypeParameter(name="T")
         assert tp.name == "T"
         assert tp.bound is None
-        assert tp._tag == "typeparam"
+        assert tp.tag == "typeparam"
 
     def test_type_parameter_with_bound(self) -> None:
         """Test TypeVar with bound (like T: int)."""

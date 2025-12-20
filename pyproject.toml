@@ -51,19 +51,33 @@ strict = true
 [tool.pyright]
 typeCheckingMode = "strict"
 
+[[tool.pyright.executionEnvironments]]
+root = "src/typedsl"
+reportUnknownArgumentType = "warning"
+reportUnknownVariableType = "warning"
+reportUnnecessaryIsInstance = "warning"  # Defensive checks for invalid inputs are fine
+
 [tool.ruff]
 unsafe-fixes = true
 
 [tool.ruff.lint]
-fixable = ["ALL"]
 select = ["ALL"]
-ignore = ["T201"]
+fixable = ["ALL"]
+ignore = [
+    "D203",  # incompatible with D211
+    "D213",  # incompatible with D212
+]
 
 [tool.ruff.lint.per-file-ignores]
-"test_*.py" = [
-    "S101",    # asserts allowed in tests...
-    "ARG",     # Unused function args -> fixtures nevertheless are functionally relevant...
-    "FBT",     # Don't care about booleans as positional arguments in tests, e.g. via @pytest.mark.parametrize()
-    "PLR2004", # Magic value used in comparison, ...
-    "S311",    # Standard pseudo-random generators are not suitable for cryptographic purposes
+# Tests: allow asserts, magic values, and code-like comments (explanatory examples)
+"tests/**" = ["S101", "PLR2004", "ERA001"]
+# Type manipulation code legitimately requires Any for runtime type introspection
+"src/typedsl/schema.py" = [
+    "ANN401",   # Any required for extract_type(py_type: Any)
+    "C901",     # extract_type is a type dispatch function, complexity is inherent
+    "PLR0911",  # multiple returns needed for type dispatch
+    "PLR0912",  # multiple branches needed for type dispatch
 ]
+"src/typedsl/nodes.py" = ["ANN401"]  # __init_subclass__ accepts arbitrary **kwargs
+"src/typedsl/types.py" = ["ANN401"]  # substitute_type_params handles arbitrary type expressions
+"src/typedsl/adapters.py" = ["ANN401"]  # serialization handles arbitrary values

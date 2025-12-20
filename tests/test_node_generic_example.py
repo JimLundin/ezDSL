@@ -40,8 +40,7 @@ def test_generic_node_field_extraction() -> None:
 
 
 def test_complex_generic_node_field() -> None:
-    """Test: class MyNode[T]:
-              args: list[dict[str, T]].
+    """Test extracting list[dict[str, T]] where T is a type parameter.
 
     This should serialize as:
     - ListType
@@ -71,8 +70,7 @@ def test_complex_generic_node_field() -> None:
 
 
 def test_bounded_type_parameter_in_generic_node() -> None:
-    """Test: class NumericNode[T: float]:
-              value: T.
+    """Test extracting a bounded type parameter T: float.
 
     The TypeVar should capture the bound.
     """
@@ -87,9 +85,10 @@ def test_bounded_type_parameter_in_generic_node() -> None:
 
 
 def test_type_parameter_vs_concrete_type() -> None:
-    """Demonstrate the difference between:
+    """Demonstrate the difference between type parameters and concrete types.
+
     1. A type parameter (T in class definition)
-    2. A concrete type argument (int when using the class).
+    2. A concrete type argument (int when using the class)
     """
     T = TypeVar("T")
 

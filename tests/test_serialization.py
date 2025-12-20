@@ -259,7 +259,7 @@ class TestFromDict:
         """Test that unknown tag error lists available tags."""
         data = {"tag": "completely_unknown_tag_xyz"}
 
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(ValueError, match="Unknown tag") as exc_info:
             from_dict(data)
 
         error_msg = str(exc_info.value)
@@ -541,7 +541,7 @@ class TestSerializationEdgeCases:
         obj = CustomClass()
 
         with pytest.raises(ValueError, match="Cannot serialize"):
-            to_dict(obj)  # type: ignore
+            to_dict(obj)  # type: ignore[arg-type]
 
 
 class TestSerializationTypes:

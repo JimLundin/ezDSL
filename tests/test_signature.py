@@ -17,8 +17,8 @@ class TestNodeWithSignature:
         class SimpleNode(Node[int], tag="simple_sig"):
             value: int
 
-        assert SimpleNode._tag == "simple_sig"
-        assert SimpleNode._signature == {"tag": "simple_sig"}
+        assert SimpleNode.tag == "simple_sig"
+        assert SimpleNode.signature == {"tag": "simple_sig"}
 
     def test_node_with_multiple_kwargs(self) -> None:
         """Node can use multiple kwargs for signature."""
@@ -27,8 +27,8 @@ class TestNodeWithSignature:
             left: int
             right: int
 
-        assert AddNode._tag == "math.add"
-        assert AddNode._signature == {"ns": "math", "name": "add"}
+        assert AddNode.tag == "math.add"
+        assert AddNode.signature == {"ns": "math", "name": "add"}
 
     def test_node_with_three_part_signature(self) -> None:
         """Node can use three-part signature."""
@@ -37,8 +37,8 @@ class TestNodeWithSignature:
             left: int
             right: int
 
-        assert MulNode._tag == "math.mul.1.0"
-        assert MulNode._signature == {
+        assert MulNode.tag == "math.mul.1.0"
+        assert MulNode.signature == {
             "ns": "math",
             "name": "mul",
             "version": "1.0",
@@ -50,8 +50,8 @@ class TestNodeWithSignature:
         class ComputerNode(Node[int]):
             value: int
 
-        assert ComputerNode._tag == "ComputerNode"
-        assert ComputerNode._signature == {}
+        assert ComputerNode.tag == "ComputerNode"
+        assert ComputerNode.signature == {}
 
     def test_node_signature_with_numbers(self) -> None:
         """Node signature can include numbers."""
@@ -59,7 +59,7 @@ class TestNodeWithSignature:
         class VersionedNode(Node[int], name="my_node", major="2", status="stable"):
             value: int
 
-        assert VersionedNode._tag == "my_node.2.stable"
+        assert VersionedNode.tag == "my_node.2.stable"
 
     def test_node_signature_kwargs_preserve_insertion_order(self) -> None:
         """Kwargs in signature preserve insertion order."""
@@ -68,8 +68,8 @@ class TestNodeWithSignature:
             value: int
 
         # Python 3.7+ dicts preserve insertion order
-        assert OrderedNode._tag == "last.first.middle"
-        assert list(OrderedNode._signature.keys()) == ["z", "a", "m"]
+        assert OrderedNode.tag == "last.first.middle"
+        assert list(OrderedNode.signature.keys()) == ["z", "a", "m"]
 
 
 class TestNodeSchemaWithSignature:
@@ -173,7 +173,7 @@ class TestSignatureEdgeCases:
         class SpecialNode(Node[int], name="my-node", version="v1.0.0"):
             value: int
 
-        assert SpecialNode._tag == "my-node.v1.0.0"
+        assert SpecialNode.tag == "my-node.v1.0.0"
 
     def test_signature_with_unicode(self) -> None:
         """Signature parts can contain unicode."""
@@ -181,7 +181,7 @@ class TestSignatureEdgeCases:
         class UnicodeNode(Node[int], ns="math", name="加法"):
             value: int
 
-        assert UnicodeNode._tag == "math.加法"
+        assert UnicodeNode.tag == "math.加法"
 
     def test_empty_signature_parts_handled(self) -> None:
         """Empty strings in signature are preserved."""
@@ -189,7 +189,7 @@ class TestSignatureEdgeCases:
         class EmptyPartNode(Node[int], ns="", name="node"):
             value: int
 
-        assert EmptyPartNode._tag == ".node"
+        assert EmptyPartNode.tag == ".node"
 
     def test_numeric_signature_values_converted_to_string(self) -> None:
         """Numeric values in signature are converted to strings."""
@@ -197,8 +197,8 @@ class TestSignatureEdgeCases:
         class NumericSig(Node[int], name="node", major=42, minor=3.14):
             value: int
 
-        assert NumericSig._tag == "node.42.3.14"
-        assert NumericSig._signature == {"name": "node", "major": 42, "minor": 3.14}
+        assert NumericSig.tag == "node.42.3.14"
+        assert NumericSig.signature == {"name": "node", "major": 42, "minor": 3.14}
 
 
 class TestSignatureCollisions:
@@ -206,13 +206,14 @@ class TestSignatureCollisions:
 
     def test_different_signatures_same_tag_raises_error(self) -> None:
         """Different signature patterns that produce same tag raise error."""
+
         class First(Node[int], ns="collision", name="test"):
             value: int
 
         # This would create the same tag
         with pytest.raises(ValueError, match="already registered"):
 
-            class Second(Node[int], tag="collision.test"):  # noqa: F841
+            class Second(Node[int], tag="collision.test"):
                 value: int
 
     def test_same_signature_components_different_order_different_tags(self) -> None:
@@ -225,6 +226,6 @@ class TestSignatureCollisions:
             value: int
 
         # Different insertion order = different tags
-        assert OrderA._tag == "1.2"
-        assert OrderB._tag == "2.1"
-        assert OrderA._tag != OrderB._tag
+        assert OrderA.tag == "1.2"
+        assert OrderB.tag == "2.1"
+        assert OrderA.tag != OrderB.tag

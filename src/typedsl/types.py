@@ -33,23 +33,23 @@ class ExternalTypeRecord[T]:
 class TypeDef:
     """Base for type definitions."""
 
-    _tag: ClassVar[str]
+    tag: ClassVar[str]
     registry: ClassVar[dict[str, type[TypeDef]]] = {}
     _external_types: ClassVar[dict[type, ExternalTypeRecord[Any]]] = {}
 
-    def __init_subclass__(cls, tag: str | None = None):
+    def __init_subclass__(cls, tag: str | None = None) -> None:
+        """Register typedef subclass with automatic tag derivation."""
         dataclass(frozen=True)(cls)
-        cls._tag = tag or cls.__name__.lower().removesuffix("type")
+        cls.tag = tag if tag is not None else cls.__name__
 
-        if existing := TypeDef.registry.get(cls._tag):
-            if existing is not cls:
-                msg = (
-                    f"Tag '{cls._tag}' already registered to {existing}. "
-                    "Choose a different tag."
-                )
-                raise ValueError(msg)
+        if (existing := TypeDef.registry.get(cls.tag)) and existing is not cls:
+            msg = (
+                f"Tag '{cls.tag}' already registered to {existing}. "
+                "Choose a different tag."
+            )
+            raise ValueError(msg)
 
-        TypeDef.registry[cls._tag] = cls
+        TypeDef.registry[cls.tag] = cls
 
     @classmethod
     def register[T](
@@ -181,8 +181,9 @@ class SequenceType(TypeDef, tag="sequence"):
 
 
 class MappingType(TypeDef, tag="mapping"):
-    """Generic mapping type: Mapping[str, int] → MappingType(key=StrType(), value=IntType()).
+    """Generic mapping type.
 
+    Mapping[str, int] -> MappingType(key=StrType(), value=IntType()).
     Abstract key-value mapping - serializers determine concrete representation.
     """
 
@@ -234,7 +235,7 @@ class ExternalType(TypeDef, tag="external"):
     name: str
 
 
-def _substitute_type_params(type_expr: Any, substitutions: dict[Any, Any]) -> Any:
+def substitute_type_params(type_expr: Any, substitutions: dict[Any, Any]) -> Any:
     """Recursively substitute type parameters in a type expression."""
     if type_expr in substitutions:
         return substitutions[type_expr]
@@ -245,7 +246,7 @@ def _substitute_type_params(type_expr: Any, substitutions: dict[Any, Any]) -> An
     if origin is None or not args:
         return type_expr
 
-    new_args = tuple(_substitute_type_params(arg, substitutions) for arg in args)
+    new_args = tuple(substitute_type_params(arg, substitutions) for arg in args)
 
     # UnionType (| operator) needs special reconstruction
     if isinstance(type_expr, types.UnionType):

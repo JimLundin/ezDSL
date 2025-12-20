@@ -10,6 +10,7 @@ from typedsl.nodes import Node, Ref
 from typedsl.types import TypeDef
 
 _adapter = JSONAdapter()
+_MAX_TAGS_IN_ERROR = 10  # Maximum number of tags to show in error messages
 
 
 def to_dict(obj: Node[Any] | Ref[Any] | TypeDef) -> dict[str, Any]:
@@ -70,10 +71,13 @@ def from_dict(data: dict[str, Any]) -> Node[Any] | Ref[Any] | TypeDef:
     # Provide helpful error with available tags
     available_node_tags = list(Node.registry.keys())
     available_typedef_tags = list(TypeDef.registry.keys())
+    node_suffix = "..." if len(available_node_tags) > _MAX_TAGS_IN_ERROR else ""
+    typedef_suffix = "..." if len(available_typedef_tags) > _MAX_TAGS_IN_ERROR else ""
+    n = _MAX_TAGS_IN_ERROR
     msg = (
         f"Unknown tag '{tag}'. "
-        f"Available node tags: {available_node_tags[:10]}{'...' if len(available_node_tags) > 10 else ''}. "
-        f"Available typedef tags: {available_typedef_tags[:10]}{'...' if len(available_typedef_tags) > 10 else ''}"
+        f"Available node tags: {available_node_tags[:n]}{node_suffix}. "
+        f"Available typedef tags: {available_typedef_tags[:n]}{typedef_suffix}"
     )
     raise ValueError(msg)
 

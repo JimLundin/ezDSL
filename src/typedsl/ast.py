@@ -7,13 +7,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
-from typedsl.nodes import Node
 from typedsl.serialization import from_dict, to_dict
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from typedsl.nodes import Ref
+    from typedsl.nodes import Node, Ref
 
 
 @dataclass
@@ -40,15 +39,17 @@ class AST:
             available = list(self.nodes.keys())
             msg = f"Node '{ref.id}' not found in AST. Available node IDs: {available}"
             raise KeyError(msg)
-        return cast(X, self.nodes[ref.id])
+        return cast("X", self.nodes[ref.id])
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize AST to dictionary."""
         return {
             "root": self.root,
             "nodes": {k: to_dict(v) for k, v in self.nodes.items()},
         }
 
     def to_json(self) -> str:
+        """Serialize AST to JSON string."""
         return json.dumps(self.to_dict(), indent=2)
 
     @classmethod
@@ -73,11 +74,12 @@ class AST:
             msg = "Missing required key 'nodes' in AST data"
             raise KeyError(msg)
 
-        nodes = {k: cast(Node[Any], from_dict(v)) for k, v in data["nodes"].items()}
+        nodes = {k: cast("Node[Any]", from_dict(v)) for k, v in data["nodes"].items()}
         return cls(data["root"], nodes)
 
     @classmethod
     def from_json(cls, s: str) -> AST:
+        """Deserialize AST from JSON string."""
         return cls.from_dict(json.loads(s))
 
 
@@ -112,11 +114,6 @@ class Interpreter[Ctx, R](ABC):
         return self.ast.resolve(ref)
 
     @abstractmethod
-    def eval(self, node: Node[Any]) -> Any:
-        """Evaluate a node. Implement with pattern matching.
-
-        Override with your preferred signature:
-        - Homogeneous: def eval(self, node: Node[Any]) -> float
-        - Typed: def eval[T](self, node: Node[T]) -> T
-        """
+    def eval(self, node: Node[Any]) -> R:
+        """Evaluate a node. Implement with pattern matching."""
         ...

@@ -1,5 +1,7 @@
 """Integration tests for typeDSL - end-to-end workflows."""
 
+import pytest
+
 from typedsl import (
     AST,
     Child,
@@ -499,8 +501,6 @@ class TestErrorRecovery:
 
     def test_deserialize_with_missing_node_definition(self) -> None:
         """Test attempting to deserialize unknown node type."""
-        import pytest
-
         # JSON with a tag that doesn't exist
         json_str = '{"tag": "unknown_node_type_xyz", "value": 42}'
 
@@ -509,7 +509,6 @@ class TestErrorRecovery:
 
     def test_resolve_nonexistent_reference(self) -> None:
         """Test resolving reference that doesn't exist in AST."""
-        import pytest
 
         class Dummy(Node[int], tag="dummy_err"):
             value: int

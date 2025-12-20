@@ -44,7 +44,7 @@ from typedsl.types import (
     TypeDef,
     TypeParameter,
     UnionType,
-    _substitute_type_params,
+    substitute_type_params,
 )
 
 # Unified type map: Python type/origin -> TypeDef class
@@ -124,7 +124,7 @@ def extract_type(py_type: Any) -> TypeDef:
             )
             raise ValueError(msg)
         substitutions = dict(zip(type_params, args, strict=True))
-        substituted = _substitute_type_params(origin.__value__, substitutions)
+        substituted = substitute_type_params(origin.__value__, substitutions)
         return extract_type(substituted)
 
     # Check unified type map (simple types use py_type, containers use origin)
@@ -134,7 +134,9 @@ def extract_type(py_type: Any) -> TypeDef:
         field_count = _get_field_count(typedef_cls)
         if len(args) != field_count:
             type_name = getattr(lookup_key, "__name__", str(lookup_key))
-            msg = f"{type_name} requires {field_count} type argument(s), got {len(args)}"
+            msg = (
+                f"{type_name} requires {field_count} type argument(s), got {len(args)}"
+            )
             raise ValueError(msg)
         return typedef_cls(*(extract_type(arg) for arg in args))
 
@@ -177,10 +179,12 @@ def extract_type(py_type: Any) -> TypeDef:
 def _extract_node_returns(cls: type[Node[Any]]) -> TypeDef:
     """Extract the return type from a Node class definition."""
     for base in getattr(cls, "__orig_bases__", ()):
-        if origin := get_origin(base):
-            if isinstance(origin, type) and issubclass(origin, Node):
-                if args := get_args(base):
-                    return extract_type(args[0])
+        origin = get_origin(base)
+        is_node_origin = isinstance(origin, type) and issubclass(origin, Node)
+        if origin is None or not is_node_origin:
+            continue
+        if args := get_args(base):
+            return extract_type(args[0])
     return NoneType()
 
 
@@ -207,8 +211,8 @@ def node_schema(cls: type[Node[Any]]) -> NodeSchema:
     )
 
     return NodeSchema(
-        tag=cls._tag,
-        signature=cls._signature,
+        tag=cls.tag,
+        signature=cls.signature,
         type_params=tuple(type_params),
         returns=_extract_node_returns(cls),
         fields=tuple(node_fields),

@@ -699,12 +699,13 @@ class TestInterpreterBasics:
             value: int
 
         class Inspector(Interpreter[None, int]):
-            def eval(self, node: Node[Any]) -> int:
+            def eval(self, _node: Node[Any]) -> int:
                 # Access ast from within eval
                 return len(self.ast.nodes)
 
         ast = AST(
-            root="a", nodes={"a": Num(value=1), "b": Num(value=2), "c": Num(value=3)}
+            root="a",
+            nodes={"a": Num(value=1), "b": Num(value=2), "c": Num(value=3)},
         )
         result = Inspector(ast, None).run()
 
