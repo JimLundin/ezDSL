@@ -62,6 +62,7 @@ unsafe-fixes = true
 
 [tool.ruff.lint]
 select = ["ALL"]
+fixable = ["ALL"]
 ignore = [
     "D203",  # incompatible with D211
     "D213",  # incompatible with D212
